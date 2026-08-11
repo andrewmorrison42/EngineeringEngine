@@ -31,15 +31,24 @@ from .envelope import (
     ReactionEnvelope,
     analyse_combinations,
     envelope_by_limit_state,
+    envelope_from_results,
 )
 from .loading import (
     UDL,
     AppliedMoment,
     Load,
+    LoadTrain,
     PartialUDL,
     PointLoad,
     SelfWeight,
     VaryingUDL,
+)
+from .moving import (
+    InfluenceLine,
+    MovingLoadResult,
+    influence_line,
+    moving_load_envelope,
+    sweep_positions,
 )
 from .results import BeamResults, Reaction
 from .solver import solve
@@ -72,6 +81,14 @@ __all__ = [
     "BeamEnvelope",
     "ActionEnvelope",
     "ReactionEnvelope",
+    "envelope_from_results",
+    # moving loads
+    "LoadTrain",
+    "MovingLoadResult",
+    "moving_load_envelope",
+    "sweep_positions",
+    "InfluenceLine",
+    "influence_line",
     # closed form benchmarks
     "ClosedFormResult",
     "ss_udl",

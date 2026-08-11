@@ -27,6 +27,7 @@ in an upward-positive frame and converts once, at a single point, in
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import ClassVar
 
@@ -460,3 +461,158 @@ class SelfWeight(Load):
 
     def total(self) -> float:
         return self.magnitude * self.length
+
+
+# ---------------------------------------------------------------------------
+# Load patterns with a free position
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LoadTrain:
+    """A load pattern with a free position along a member.
+
+    Everything is defined relative to a DATUM at the front of the train
+    (offset 0), increasing rearwards. Positioning the train at ``x`` puts the
+    datum at ``x``; components with larger offsets sit at larger positions.
+
+    Parameters
+    ----------
+    name:
+        Identifier, e.g. ``"M1600"``. Appears in the governing-position label.
+    axles:
+        ``((offset, load), ...)`` -- concentrated loads (N) at offsets (mm).
+    udl_segments:
+        ``((start_offset, end_offset, intensity), ...)`` -- distributed
+        components (N/mm) over offset ranges.
+    length:
+        Overall length of the pattern (mm). Used to decide how far the train
+        must run off each end of the member.
+    trailing_udl:
+        Intensity (N/mm) of a UDL notionally extending indefinitely behind the
+        train. Traffic models carry one of these; it is applied from the rear
+        of the train back to the start of the member.
+
+    Examples
+    --------
+    A two-axle vehicle, 3 m wheelbase, 100 kN and 60 kN::
+
+        LoadTrain("truck", axles=((0.0, 100e3), (3000.0, 60e3)), length=3000.0)
+    """
+
+    name: str
+    axles: tuple[tuple[float, float], ...] = ()
+    udl_segments: tuple[tuple[float, float, float], ...] = ()
+    length: float = 0.0
+    trailing_udl: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.length < 0:
+            raise ModelError(f"Train length must be non-negative, got {self.length}")
+        for start, end, _ in self.udl_segments:
+            if end <= start:
+                raise ModelError(
+                    f"Train UDL segment must have end > start, got {start} -> {end}"
+                )
+
+    @property
+    def total_axle_load(self) -> float:
+        """Sum of the concentrated loads (N)."""
+        return sum(load for _, load in self.axles)
+
+    def scaled(self, factor: float) -> LoadTrain:
+        """A copy with every load multiplied -- for a dynamic load allowance or
+        a lane factor. Geometry is untouched."""
+        return replace(
+            self,
+            name=self.name,
+            axles=tuple((off, load * factor) for off, load in self.axles),
+            udl_segments=tuple(
+                (a, b, w * factor) for a, b, w in self.udl_segments
+            ),
+            trailing_udl=self.trailing_udl * factor,
+        )
+
+    def at(self, position: float, member_length: float) -> tuple[Load, ...]:
+        """The loads this train applies with its datum at ``position``.
+
+        Components falling outside the member are dropped; distributed
+        components are clipped to the member. That is what lets the train run
+        on and off the ends, which is necessary -- the worst shear at a support
+        usually occurs with the train partly off the member.
+
+        Parameters
+        ----------
+        position:
+            Where to put the datum (mm from the left end). May be negative or
+            beyond the member, so the train can be partly off.
+        member_length:
+            Length of the member (mm).
+        """
+        loads: list[Load] = []
+
+        for offset, magnitude in self.axles:
+            x = position + offset
+            if 0.0 <= x <= member_length and magnitude != 0.0:
+                loads.append(PointLoad(position=x, magnitude=magnitude))
+
+        for start_off, end_off, intensity in self.udl_segments:
+            if intensity == 0.0:
+                continue
+            start = max(0.0, position + start_off)
+            end = min(member_length, position + end_off)
+            if end - start > 1e-9:
+                loads.append(PartialUDL(start=start, end=end, magnitude=intensity))
+
+        # [ASSUMPTION] The trailing UDL runs from the rear of the train back to
+        #              the start of the member. Traffic models specify a UDL of
+        #              indefinite extent behind the vehicle; on a single span
+        #              the loaded length is what falls on the member.
+        if self.trailing_udl != 0.0:
+            rear = position + self.length
+            start = 0.0
+            end = min(member_length, rear)
+            if end - start > 1e-9:
+                loads.append(
+                    PartialUDL(start=start, end=end, magnitude=self.trailing_udl)
+                )
+
+        return tuple(loads)
+
+    def mesh_points_over_sweep(
+        self, positions: Sequence[float], member_length: float
+    ) -> tuple[float, ...]:
+        """Every position any axle occupies over the whole sweep.
+
+        Handed to every solve as ``Beam.extra_mesh_points`` so all positions
+        share one grid and the envelope is element-wise. Without this, each
+        train position would mesh around its own axles and the results could
+        not be enveloped without interpolation.
+        """
+        points: set[float] = set()
+        for pos in positions:
+            for offset, _ in self.axles:
+                x = float(pos) + offset
+                if 0.0 <= x <= member_length:
+                    points.add(x)
+            for start_off, end_off, _ in self.udl_segments:
+                for x in (float(pos) + start_off, float(pos) + end_off):
+                    if 0.0 <= x <= member_length:
+                        points.add(x)
+        return tuple(sorted(points))
+
+    def describe(self) -> list[str]:
+        lines = [f"Train      = {self.name}", f"Length     = {self.length / 1000:.3f} m"]
+        if self.axles:
+            lines.append(f"Axles      = {len(self.axles)}, total "
+                         f"{self.total_axle_load / 1e3:.1f} kN")
+            for offset, load in self.axles:
+                lines.append(f"    {offset / 1000:7.3f} m   {load / 1e3:8.1f} kN")
+        for start, end, w in self.udl_segments:
+            lines.append(
+                f"UDL        = {w * 1000 / 1e3:.2f} kN/m over "
+                f"{start / 1000:.3f}-{end / 1000:.3f} m"
+            )
+        if self.trailing_udl:
+            lines.append(f"Trailing   = {self.trailing_udl * 1000 / 1e3:.2f} kN/m")
+        return lines

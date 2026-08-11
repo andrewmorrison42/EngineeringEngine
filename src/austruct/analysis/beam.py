@@ -210,7 +210,9 @@ class Beam:
 
     # -- analysis -------------------------------------------------------------
 
-    def solve(self, min_elements: int = 200) -> BeamResults:
+    def solve(
+        self, min_elements: int = 200, refine_peaks: bool = True
+    ) -> BeamResults:
         """Analyse the beam.
 
         Imported lazily so that ``beam.py`` and ``solver.py`` can reference each
@@ -218,7 +220,7 @@ class Beam:
         """
         from .solver import solve as _solve
 
-        return _solve(self, min_elements=min_elements)
+        return _solve(self, min_elements=min_elements, refine_peaks=refine_peaks)
 
     def describe(self) -> list[str]:
         lines = [

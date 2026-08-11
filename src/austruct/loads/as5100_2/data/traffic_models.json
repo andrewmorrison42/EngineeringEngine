@@ -1,0 +1,115 @@
+{
+  "_comment": [
+    "AS 5100.2:2017 road traffic load models.",
+    "",
+    "=====================================================================",
+    "THESE NUMBERS ARE THE LEAST RELIABLE IN THE ENTIRE PACKAGE.",
+    "=====================================================================",
+    "",
+    "Everywhere else in austruct a [VECTOR] tag marks a single coefficient",
+    "that needs checking. Here it marks the GEOMETRY AND MAGNITUDE OF AN",
+    "ENTIRE LOAD MODEL. If an axle spacing or an axle load is wrong, every",
+    "bridge number the toolkit produces is wrong, and plausibly so.",
+    "",
+    "The values below are the author's best recollection of AS 5100.2",
+    "Section 6 and its figures. They have NOT been transcribed from the",
+    "printed standard. Before this file is used for anything:",
+    "",
+    "  1. Open AS 5100.2:2017 Section 6 and the M1600/S1600/A160/W80",
+    "     figures.",
+    "  2. Confirm or correct every axle offset, every axle load, the UDL",
+    "     intensities, the loaded widths, and the minimum spacing between",
+    "     axle groups.",
+    "  3. Set status to VERIFIED and record checked_by and checked_on.",
+    "",
+    "Until step 3 is done, austruct.loads.as5100_2 refuses to build a load",
+    "train unless it is passed allow_unverified=True. That is deliberate.",
+    "",
+    "GEOMETRY CONVENTION",
+    "axle offsets are measured rearwards from the front of the vehicle, in",
+    "mm. axle_load is the TOTAL load on that axle (both wheels), in kN.",
+    "udl is per lane, in kN/m. loaded_width is the transverse width the",
+    "udl is spread over, in m."
+  ],
+  "source": "AS 5100.2:2017 Section 6 -- road traffic actions",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {
+    "axle_offset": "mm",
+    "axle_load": "kN",
+    "udl": "kN/m",
+    "loaded_width": "m",
+    "wheel_contact": "mm"
+  },
+
+  "W80": {
+    "description": "Individual heavy wheel load. Governs local effects such as deck slabs and the tops of buried structures.",
+    "wheel_load": 80,
+    "contact_length": 250,
+    "contact_width": 400,
+    "dla": 0.4,
+    "_note": "contact_length is along the direction of travel; contact_width is transverse."
+  },
+
+  "A160": {
+    "description": "Single axle load. Governs short spans and local effects.",
+    "axle_load": 160,
+    "wheel_spacing": 2000,
+    "contact_length": 250,
+    "contact_width": 400,
+    "dla": 0.4
+  },
+
+  "M1600": {
+    "description": "Moving traffic load. The general design vehicle for global effects.",
+    "udl": 6.0,
+    "loaded_width": 3.2,
+    "axle_group": {
+      "n_axles": 4,
+      "axle_spacing": 1250,
+      "axle_load": 360
+    },
+    "n_groups": 2,
+    "group_gap_min": 6250,
+    "group_gap_variable": true,
+    "dla": 0.35,
+    "_note": [
+      "Each axle group is n_axles axles at axle_spacing, each carrying",
+      "axle_load. Groups are separated by a variable gap of at least",
+      "group_gap_min. The udl acts over the whole loaded length.",
+      "CONFIRM n_groups: the standard specifies a variable number of groups",
+      "to suit the span, not a fixed two."
+    ]
+  },
+
+  "S1600": {
+    "description": "Stationary traffic load. Governs where traffic queues, and carries no dynamic allowance.",
+    "udl": 24.0,
+    "loaded_width": 3.2,
+    "axle_group": {
+      "n_axles": 4,
+      "axle_spacing": 1250,
+      "axle_load": 240
+    },
+    "n_groups": 2,
+    "group_gap_min": 6250,
+    "group_gap_variable": true,
+    "dla": 0.0
+  },
+
+  "lane_factors": {
+    "_note": "Accompanying lane factors. First loaded lane 1.0, subsequent lanes reduced.",
+    "1": [1.0],
+    "2": [1.0, 0.8],
+    "3": [1.0, 0.8, 0.4],
+    "4": [1.0, 0.8, 0.4, 0.4],
+    "5": [1.0, 0.8, 0.4, 0.4, 0.4],
+    "6": [1.0, 0.8, 0.4, 0.4, 0.4, 0.4]
+  },
+
+  "not_implemented": {
+    "HLP320": "Heavy load platform, 320 t. Not implemented.",
+    "HLP400": "Heavy load platform, 400 t. Not implemented."
+  }
+}

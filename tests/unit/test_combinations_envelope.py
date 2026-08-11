@@ -121,13 +121,17 @@ def test_filter_relevant_drops_wind_when_there_is_no_wind_case(cases):
     assert "ULS5" not in names, "0.9G + Wu has no wind case to act on"
 
 
-def test_bridge_combinations_fail_loudly_not_silently():
+def test_bridge_combinations_factor_traffic_and_permanent_both_ways():
+    """The minimum permanent factor exists to catch load reversal, so a set
+    without one would silently miss the case that governs a cantilever."""
     from austruct.loads import as5100_sls, as5100_uls
 
-    with pytest.raises(NotImplementedError, match="traffic load models"):
-        as5100_uls()
-    with pytest.raises(NotImplementedError):
-        as5100_sls()
+    uls = as5100_uls()
+    g_factors = {c.factor_for(ActionType.G) for c in uls}
+    assert min(g_factors) < 1.0, "no reversal case in the ULS set"
+    assert max(g_factors) > 1.0
+    assert any(c.factor_for(ActionType.Traffic) > 0 for c in uls)
+    assert all(c.name.startswith("B-") for c in uls + as5100_sls())
 
 
 # ---------------------------------------------------------------------------

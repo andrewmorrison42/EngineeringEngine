@@ -23,7 +23,24 @@ standards open beside them.
 AUSTRUCT_STRICT=1 python your_calc.py     # unverified modules raise instead of returning
 ```
 
-Everything needing verification is in five places, deliberately:
+### The traffic models fail closed harder than anything else
+
+Everywhere else an unverified value is a single coefficient. In
+`loads/as5100_2/` the unverified content is *the geometry and magnitude of an
+entire load model* — an axle spacing transcribed wrongly produces a bridge
+design that is wrong in a way no downstream check will catch. So those
+constructors **raise by default**:
+
+```python
+>>> traffic.m1600()
+UnverifiedLoadModel: The M1600 load model geometry in traffic_models.json is
+UNVERIFIED -- it has not been transcribed from AS 5100.2:2017, only recalled...
+
+>>> traffic.m1600(allow_unverified=True)   # development and testing only
+```
+
+
+Everything needing verification is in a handful of places, deliberately:
 
 | File | What to check |
 |---|---|
@@ -32,6 +49,8 @@ Everything needing verification is in five places, deliberately:
 | `src/austruct/loads/combinations.py` | AS/NZS 1170.0 combinations |
 | `src/austruct/project/project.py` | ψ combination factors by occupancy |
 | `src/austruct/materials/data/*.json` | Table 3.1.2, bar sizes, steel grades |
+| `src/austruct/loads/as5100_2/data/traffic_models.json` | **M1600/S1600/A160/W80 axle geometry — the highest-risk file in the package** |
+| `src/austruct/loads/dispersal.py` | Fill dispersal slope |
 
 Those JSON data files carry their own `status` / `checked_by` / `checked_on`
 fields, so the tables can be checked and signed off by the engineer who owns the
@@ -59,8 +78,8 @@ to, so the register can report what is actually built:
 | # | ASET component | Package | What it does here |
 |---|---|---|---|
 | 1 | **Reference data** | `materials/` | Concrete grades, steel grades, bar catalogue. Held as JSON, queried in one call. |
-| 2 | **Project data** | `project/`, `loads/` | Job record → ψ factors → jurisdiction-specific load combinations. |
-| 3 | **Fast demand calculation** | `analysis/` | Stiffness solver, then enveloping across combinations with the governing combo recorded. |
+| 2 | **Project data** | `project/`, `loads/` | Job record → ψ factors → jurisdiction-specific combinations; AS 5100.2 traffic models; fill dispersal. |
+| 3 | **Fast demand calculation** | `analysis/` | Stiffness solver, moving-load sweeps, influence lines, then enveloping with the governing case recorded. |
 | 4 | **Design documentation** | `design_documentation/` | Plain-text designation grammar + CSV member schedules, round-tripping to sections. |
 | 5 | **Design verification** | `design/`, `sections/` | AS 3600 and AS 5100.5 flexure and shear. |
 | 6 | **Reporting** | `report/` | Fixed audit layout, interchangeable renderers. |
@@ -77,7 +96,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 208 tests
+pytest                     # 256 tests
 ```
 
 Only runtime dependency is `numpy`.
@@ -95,11 +114,17 @@ L1   materials             concrete, reinforcement, bar catalogue        [ASET 1
 L1b  project               job record, occupancy, exposure, ψ factors    [ASET 2]
 L2   sections              geometry primitives, RC sections, properties
 L2b  design_documentation  designation grammar, member schedules         [ASET 4]
-L3   analysis              beam model, solver, closed forms, envelopes   [ASET 3]
-L3b  loads                 load combinations, AS 5100.2 traffic loads    [ASET 2]
+L3   analysis              loads, beam model, solver, moving loads,      [ASET 3]
+                           influence lines, envelopes
+L3b  loads                 combinations, AS 5100.2 traffic, dispersal    [ASET 2]
 L4   design                rc_common/ + as3600/ + as5100_5/              [ASET 5]
 L5   report                the audit artifact                            [ASET 6]
 ```
+
+Note `LoadTrain` lives in `analysis/loading.py`, not in `analysis/moving.py`.
+A load pattern is a load, and putting it with the driver would make `loads`
+depend on `analysis.envelope`, which already depends on `loads.combinations` —
+a genuine import cycle rather than a stylistic one.
 
 ### The decisions worth knowing about
 
@@ -247,7 +272,90 @@ python examples/01_beam_analysis.py        # support arrangements and load types
 python examples/02_beam_design_report.py   # end-to-end design + audit report
 python examples/03_as3600_vs_as5100.py     # the two standards side by side
 python examples/04_full_aset_workflow.py   # all six ASET components in one run
+python examples/05_buried_structure_and_moving_load.py   # moving loads + fill dispersal
 ```
+
+---
+
+## Moving loads
+
+A traffic load model is not a load, it is a pattern with a *free position*.
+M1600 does not act at midspan; it acts wherever it produces the worst effect,
+and that position differs for moment at midspan, shear at a support, and the
+reaction at a pier. So the analysis has to search.
+
+```python
+from austruct.analysis import LoadTrain, moving_load_envelope, influence_line
+
+train = LoadTrain("2-axle", axles=((0.0, 100*kN), (4*m, 100*kN)), length=4*m)
+result = moving_load_envelope(beam, train, step=50.0)
+
+result.M_star                          # 810.0 kN.m
+result.critical_position("moment")     # where the leading axle was
+```
+
+The sweep runs the train **on and off both ends**, because the worst shear at a
+support usually occurs with the vehicle partly off the member, and adds
+positions that place an axle exactly on each support — a uniform sweep only ever
+gets within half a step of one.
+
+Each train position becomes a case in the same envelope machinery the load
+combinations use, so the "governing combination" label simply becomes the
+governing position. One implementation answers both questions.
+
+**Influence lines** answer the complementary question — where should the load go
+to maximise a given response — and their area is the standard hand check:
+
+```python
+il = influence_line(beam, "moment", location=L/2)
+il.peak                    # L/4
+w * il.area                # == w.L²/8, the UDL effect
+il = influence_line(beam, "shear", location=L/4, side="right")
+```
+
+That `side` argument is not decoration: the shear influence line **steps by 1.0
+across the section it is measured at**, so "the shear at L/4" is two different
+numbers depending on which face you stand on, and asking without saying returns
+the average of the two — a value that answers neither question.
+
+---
+
+## Load through fill onto a buried structure
+
+A culvert does not see a wheel. It sees what the wheel became after spreading
+through the fill.
+
+```python
+from austruct.loads import FillDispersal, buried_structure_loads
+
+fill = FillDispersal(depth=600, density=2000, slope=2.0, effective_width=1000)
+loads = buried_structure_loads(fill, span, wheel, contact_len, contact_wid,
+                               wheel_positions=(span/2,))
+```
+
+Two things arrive: the fill's own weight as a UDL, and each wheel spread over a
+patch that grows with depth. Overlapping patches add by superposition, which
+needs no special case.
+
+The intensity applied is `pressure × min(dispersed_width, effective_width)`.
+That `min` matters — under shallow fill the patch is narrower than the strip and
+multiplying by the full strip width would invent load, turning an 80 kN wheel
+into 200 kN on a 1 m strip.
+
+**Both extremes of the fill range must be checked.** Shallow fill governs the
+wheel, deep fill governs the earth pressure, and the total has a minimum in
+between:
+
+```
+  fill    earth    patch  pressure   M_earth   M_wheel   M_total
+    mm      kPa       mm       kPa      kN.m      kN.m      kN.m
+   300     5.89      550     207.8     26.49    114.50    140.99
+  1200    23.54     1450      34.5    105.95     65.94    171.89
+  3000    58.86     3250       7.2    264.87     25.74    290.61
+```
+
+To sweep the dispersed vehicle rather than fix it, `fill.dispersed_train(...)`
+returns a still-positionable train with the dispersal baked in.
 
 ---
 
@@ -310,7 +418,7 @@ without a named checker raises.
 
 ## What is verified, and what is not
 
-**Verified by test (208 passing):**
+**Verified by test (256 passing):**
 
 - Stiffness solver against closed-form solutions for simply supported,
   cantilever, propped cantilever, encastre and continuous beams — reactions,
@@ -324,6 +432,14 @@ without a named checker raises.
 - Designation grammar round-trip across rectangular, tee and doubly reinforced
   sections; schedule round-trip in both forms
 - Project record round-trip including forward-compatible unknown fields
+- Moving-load sweeps against closed-form results: `PL/4` for a single load,
+  `P(2L-a)²/8L` for a two-axle train, and a moving UDL longer than the span
+  reducing to `wL²/8`
+- Influence lines: peak `L/4` and area reproducing `wL²/8` for moment, the
+  unit step across a shear section, and `-0.0962L` at the centre support of
+  two equal spans
+- Fill dispersal conserving load at every depth, and the patch-load moment
+  `W(L/4 - a/8)` exactly
 - Contract compliance across every public entry point
 - Fail-closed behaviour throughout
 
@@ -335,6 +451,9 @@ without a named checker raises.
 - Whether AS 3600 Cl 8.2.4.2's `k_v` uses `d_o` or `d_v`
   (see `KV_NO_STEEL_DEPTH_IS_DO`)
 - AS 5100.5's φ for flexure, and its `k_uo` limit (0.36 or 0.40)
+- **AS 5100.2 traffic geometry** — axle spacings, axle loads, UDL
+  intensities, group counts and spacings. Recalled, not transcribed.
+- AS 5100.2 load combination factors, and the dispersal slope through fill
 - Amendment states — every `Standard.amendments` tuple is empty
 
 ---
@@ -343,7 +462,9 @@ without a named checker raises.
 
 | | Why it matters |
 |---|---|
-| **AS 5100.2 traffic loads** | M1600, S1600, A160, W80, HLP, DLA. `as5100_uls()` and `Project(structure_type=BRIDGE).load_combinations()` both **raise** rather than silently returning building combinations. |
+| **HLP heavy load platform** | HLP320/HLP400 not implemented; `dla()` raises for them. |
+| **Bridge actions beyond gravity + traffic** | The AS 5100.2 combination set covers permanent and road traffic only — no wind, thermal, shrinkage, earthquake, collision, flood or construction actions. |
+| **Transverse distribution** | Traffic models are returned per lane; distributing onto a particular girder is left to the caller. |
 | **Serviceability checks** | Deflection limits, crack control. `cracked_properties`, `cracking_moment` and the SLS envelopes are the foundation. |
 | **Durability** | Cover and exposure. `Project.exposure` is recorded but not yet acted on. |
 | **Prestress** | Stubbed. |

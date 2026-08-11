@@ -478,30 +478,81 @@ def analyse_combinations(
     for combo in combinations:
         loads = combo.apply(cases)
         trial = replace(beam, loads=loads, extra_mesh_points=shared)
-        results[combo.name] = trial.solve(min_elements=min_elements)
+        # refine_peaks=False keeps every combination on one sample grid --
+        # see Beam.solve. Resolution comes from min_elements instead.
+        results[combo.name] = trial.solve(
+            min_elements=min_elements, refine_peaks=False
+        )
 
-    # [CHECK] The shared mesh should make every result the same shape. If it
-    #         does not, enveloping element-wise would silently compare
-    #         different positions, so refuse rather than interpolate.
+    if limit_state is None:
+        states = {c.limit_state for c in combinations}
+        limit_state = states.pop() if len(states) == 1 else LimitState.ULS
+
+    return envelope_from_results(
+        results, beam, limit_state=limit_state, combinations=combinations
+    )
+
+
+def envelope_from_results(
+    results: dict[str, BeamResults],
+    beam: Beam,
+    limit_state: LimitState = LimitState.ULS,
+    combinations: tuple[LoadCombination, ...] = (),
+) -> BeamEnvelope:
+    """Envelope a set of named results into one :class:`BeamEnvelope`.
+
+    The shared core of every kind of enveloping this package does. The keys of
+    ``results`` become the "governing combination" labels, so what a label
+    MEANS depends on the caller:
+
+    - :func:`analyse_combinations` passes combination names, and the label
+      answers "which load combination governs?"
+    - :func:`austruct.analysis.moving.moving_load_envelope` passes train
+      positions, and the same label answers "where was the vehicle?"
+
+    Both questions have the same shape -- "which of these cases produced the
+    peak" -- so they share one implementation rather than two that drift.
+
+    Parameters
+    ----------
+    results:
+        Named results, all solved on an IDENTICAL sample grid.
+    beam:
+        The member, for support positions and labels.
+    limit_state, combinations:
+        Recorded on the envelope for reporting.
+
+    Raises
+    ------
+    ValueError
+        If the results do not share one grid -- enveloping element-wise across
+        differing grids would silently compare different positions.
+    """
+    if not results:
+        raise ValueError("No results to envelope")
+
+    # [CHECK] A shared grid is a precondition, not an aspiration. Refuse rather
+    #         than interpolate: interpolation would smear the shear
+    #         discontinuities an envelope exists to capture.
     lengths = {len(r.x) for r in results.values()}
     if len(lengths) != 1:
         raise ValueError(
-            f"Combination results have differing sample counts {sorted(lengths)}; "
-            "the shared mesh failed. This is an internal error -- please report it."
+            f"Results have differing sample counts {sorted(lengths)}; the shared "
+            "mesh failed. Pass every case the same Beam.extra_mesh_points."
         )
 
     x = next(iter(results.values())).x
 
     def build(attr: str, name: str, unit: str, disp_unit: str, disp_factor: float):
-        per_combo = {n: getattr(r, attr) for n, r in results.items()}
-        mx, mn, mx_combo, mn_combo = _envelope_arrays(per_combo)
+        per_case = {n: getattr(r, attr) for n, r in results.items()}
+        mx, mn, mx_case, mn_case = _envelope_arrays(per_case)
         return ActionEnvelope(
             name=name,
             x=x,
             max_values=mx,
             min_values=mn,
-            max_combo=mx_combo,
-            min_combo=mn_combo,
+            max_combo=mx_case,
+            min_combo=mn_case,
             unit=unit,
             display_unit=disp_unit,
             display_factor=disp_factor,
@@ -534,10 +585,6 @@ def analyse_combinations(
                 min_moment_combo=min_m_name,
             )
         )
-
-    if limit_state is None:
-        states = {c.limit_state for c in combinations}
-        limit_state = states.pop() if len(states) == 1 else LimitState.ULS
 
     return BeamEnvelope(
         member=beam.name or "member",

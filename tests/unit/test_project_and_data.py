@@ -155,12 +155,20 @@ def test_psi_factors_actually_reach_the_combinations():
     assert s_uls3.factor_for(ActionType.Q) > r_uls3.factor_for(ActionType.Q)
 
 
-def test_bridge_project_fails_closed():
-    """A bridge silently getting building combinations is exactly the error the
-    project record exists to prevent."""
+def test_bridge_project_gets_bridge_combinations():
+    """A bridge silently getting BUILDING combinations is exactly the error the
+    project record exists to prevent, so the routing is pinned."""
     bridge = Project(job_number="B-1", structure_type=StructureType.BRIDGE)
-    with pytest.raises(NotImplementedError, match="AS 5100.2"):
-        bridge.load_combinations()
+    building = Project(job_number="A-1", structure_type=StructureType.BUILDING)
+
+    bridge_names = {c.name for c in bridge.load_combinations()}
+    building_names = {c.name for c in building.load_combinations()}
+
+    assert all(n.startswith("B-") for n in bridge_names)
+    assert not (bridge_names & building_names)
+    assert any(
+        c.factor_for(ActionType.Traffic) > 0 for c in bridge.load_combinations()
+    ), "a bridge combination set must factor traffic actions"
 
 
 def test_json_round_trip(tmp_path, project):

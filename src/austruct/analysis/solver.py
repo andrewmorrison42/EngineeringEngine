@@ -134,7 +134,24 @@ def _build_mesh(beam: Beam, min_elements: int) -> np.ndarray:
         if 0.0 <= p <= beam.length:
             critical.add(float(p))
 
-    nodes = sorted(critical)
+    # [CHECK] Merge near-coincident nodes before meshing.
+    #
+    #         Positions arriving from a moving-load sweep are computed by
+    #         floating-point arithmetic, so a point that should be 4000.0 may
+    #         arrive as 3999.9999999999995. Deduplicating by exact value keeps
+    #         both, producing an element ~5e-13 mm long whose stiffness is
+    #         ~1e38 -- the assembled matrix then loses rank and the solve
+    #         reports the beam as an unstable mechanism. Merging on a tolerance
+    #         is the fix; rounding is not, because two genuinely distinct
+    #         points can straddle a rounding boundary.
+    tol = max(1e-6, 1e-9 * beam.length)
+    nodes: list[float] = []
+    for value in sorted(critical):
+        if not nodes or value - nodes[-1] > tol:
+            nodes.append(value)
+    # The member end must survive the merge even if a load sits just inside it.
+    if beam.length - nodes[-1] > 0:
+        nodes[-1] = beam.length
 
     # Infill each gap so that no element is longer than the target, giving a
     # smooth deflected shape and accurate nodal displacements.
@@ -148,7 +165,7 @@ def _build_mesh(beam: Beam, min_elements: int) -> np.ndarray:
             filled.append(a + gap * i / n_sub)
     filled.append(nodes[-1])
 
-    return np.array(sorted(set(np.round(filled, 9))))
+    return np.array(filled)
 
 
 def _assign_point_actions_to_elements(
@@ -189,7 +206,9 @@ def _distributed_load_vector(loads: list[Load], x_start: float, L: float) -> np.
     return f
 
 
-def solve(beam: Beam, min_elements: int = 200) -> BeamResults:
+def solve(
+    beam: Beam, min_elements: int = 200, refine_peaks: bool = True
+) -> BeamResults:
     """Analyse a beam and return its diagrams, reactions and deflections.
 
     Parameters
@@ -202,6 +221,16 @@ def solve(beam: Beam, min_elements: int = 200) -> BeamResults:
         nodes, so this controls the smoothness of the plotted deflected shape
         and the resolution of the extrema search, not the accuracy of the
         reactions.
+    refine_peaks:
+        Add sample points at the zero-shear crossings, where the bending moment
+        is stationary, so the reported peak is exact rather than read from the
+        nearest sample.
+
+        Must be FALSE when the result will be enveloped against others: the
+        crossings differ from case to case, so refining would give each case a
+        different sample grid and the envelope could no longer be taken
+        element-wise. The envelope machinery passes False for that reason and
+        relies on ``min_elements`` for its resolution instead.
 
     Returns
     -------
@@ -279,10 +308,43 @@ def solve(beam: Beam, min_elements: int = 200) -> BeamResults:
     K_ff = K[np.ix_(free, free)]
     F_f = F[free]
 
+    # [ASSUMPTION] The system is Jacobi-scaled before both the stability check
+    #              and the solve.
+    #
+    # A beam stiffness matrix mixes degrees of freedom with different physical
+    # dimensions: translational terms go as 12EI/L^3, rotational ones as 4EI/L.
+    # For a fine mesh of a stiff member those differ by many orders of
+    # magnitude -- with EI = 1e15 N.mm^2 and 50 mm elements, by about 1e4 per
+    # element.
+    #
+    # That matters because np.linalg.matrix_rank sets its zero-tolerance from
+    # the LARGEST singular value. On such a matrix, genuine non-zero singular
+    # values fall below that tolerance and a perfectly stable beam is reported
+    # as a mechanism. Scaling each row and column by 1/sqrt(diagonal) puts
+    # every diagonal at 1.0, which removes the dimensional mismatch and makes
+    # the rank test mean what it says. Scaling is a similarity transform, so it
+    # cannot turn a singular matrix into a non-singular one -- a real mechanism
+    # is still caught.
+    diag = np.diag(K_ff).copy()
+    if np.any(diag <= 0.0):
+        raise ModelError(
+            "Beam is unstable -- a degree of freedom has no stiffness at all. "
+            "Check that every span is supported and that EI is positive."
+        )
+    scale = 1.0 / np.sqrt(diag)
+    K_scaled = K_ff * scale[:, None] * scale[None, :]
+
     # [CHECK] A singular reduced stiffness matrix means a rigid body mechanism:
     #         a beam on one roller, or a span with no support at all. Report it
     #         as a model error rather than letting numpy return nonsense.
-    if np.linalg.matrix_rank(K_ff) < len(free):
+    #
+    # The tolerance is explicit. On a Jacobi-scaled matrix every diagonal is
+    # 1.0, so a healthy system's smallest singular value stays well above
+    # 1e-12 even for an awkward mesh, while a genuine rigid-body mode gives a
+    # singular value at machine zero (~1e-16). Leaving numpy to pick the
+    # tolerance from the largest singular value is what produced false
+    # "unstable" reports on fine meshes of stiff members.
+    if np.linalg.matrix_rank(K_scaled, tol=1e-12) < len(free):
         raise ModelError(
             "Beam is unstable -- the restraints do not prevent rigid body motion. "
             "Check that there are at least two vertical supports (or one fixed "
@@ -291,7 +353,9 @@ def solve(beam: Beam, min_elements: int = 200) -> BeamResults:
 
     d = np.zeros(n_dof)
     try:
-        d[free] = np.linalg.solve(K_ff, F_f)
+        # Solve the scaled system and unscale: K.d = F becomes
+        # (S K S)(S^-1 d) = S F with S = diag(scale).
+        d[free] = scale * np.linalg.solve(K_scaled, scale * F_f)
     except np.linalg.LinAlgError as exc:  # pragma: no cover -- rank check catches this
         raise ModelError(f"Stiffness solve failed: {exc}") from exc
 
@@ -318,6 +382,23 @@ def solve(beam: Beam, min_elements: int = 200) -> BeamResults:
     # -- diagrams by statics --------------------------------------------------
     xs = _diagram_positions(beam, nodes)
     shear, moment = _statics_diagrams(beam, reactions, xs)
+
+    # [CHECK] Refine at the zero-shear crossings.
+    #
+    # The peak bending moment occurs where the shear passes through zero, and
+    # under a distributed load that point is generally NOT a load boundary or a
+    # mesh node -- so nothing in the sampling above puts a point there. The peak
+    # is then read from the nearest sample and understated by w.delta^2/2. On a
+    # 6 m span with a 250 mm patch load that is a 0.03% error, which is small
+    # but is a systematic bias, always low, and it would need a much finer mesh
+    # to remove any other way.
+    #
+    # Locating the crossings costs one extra statics pass and no extra solve,
+    # because the shear diagram already exists.
+    crossings = _zero_shear_crossings(xs, shear) if refine_peaks else []
+    if crossings:
+        xs = np.array(sorted(set(xs.tolist()) | set(crossings)))
+        shear, moment = _statics_diagrams(beam, reactions, xs)
 
     # -- deflections by interpolation of the nodal solution --------------------
     deflection, rotation = _interpolate_displacements(nodes, d, xs)
@@ -381,6 +462,30 @@ def _diagram_positions(beam: Beam, nodes: np.ndarray) -> np.ndarray:
                 positions.add(float(p))
 
     return np.array(sorted(p for p in positions if -_EPS <= p <= beam.length + _EPS))
+
+
+def _zero_shear_crossings(xs: np.ndarray, shear: np.ndarray) -> list[float]:
+    """Positions where the shear diagram crosses zero.
+
+    These are where the bending moment is stationary, so sampling them makes
+    the reported peak moment exact rather than merely close.
+
+    Only genuine crossings between adjacent samples are returned -- a step
+    THROUGH zero at a point load is a discontinuity, not a stationary point,
+    and the moment there is already sampled by the discontinuity bracketing.
+    """
+    crossings: list[float] = []
+    for i in range(len(xs) - 1):
+        v1, v2 = shear[i], shear[i + 1]
+        if v1 == 0.0 or v2 == 0.0 or (v1 > 0) == (v2 > 0):
+            continue
+        gap = xs[i + 1] - xs[i]
+        # Skip the pair straddling a discontinuity: they are 2.EPS apart and
+        # the sign change there is a jump, not a crossing.
+        if gap <= 4 * _EPS:
+            continue
+        crossings.append(float(xs[i] + gap * v1 / (v1 - v2)))
+    return crossings
 
 
 def _statics_diagrams(

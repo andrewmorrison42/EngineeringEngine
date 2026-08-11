@@ -391,39 +391,130 @@ CLAUSE_BRIDGE_SLS = ClauseRef(
     AS5100_2_2017, "22", note="Combinations of actions -- serviceability limit states"
 )
 
-BRIDGE_COMBINATIONS_IMPLEMENTED = False
-"""Guard flag. :func:`as5100_uls` refuses to run while this is False."""
+# [VECTOR] UNVERIFIED and UNCONFIRMED. The factors below are the author's best
+#          recollection and have NOT been transcribed from AS 5100.2 Section
+#          22. They must be checked before any bridge calculation is issued.
+#          The traffic load model geometry they act on carries the same
+#          warning -- see austruct/loads/as5100_2/data/traffic_models.json.
+GAMMA_G_CONCRETE_MAX = 1.2
+GAMMA_G_CONCRETE_MIN = 0.85
+"""Permanent effects, cast-in-place concrete. Two values because a permanent
+action that RELIEVES an effect must be factored down, not up -- the minimum
+governs uplift, overturning and load reversal."""
+
+GAMMA_G_SUPERIMPOSED_MAX = 2.0
+GAMMA_G_SUPERIMPOSED_MIN = 0.7
+"""Superimposed dead load. A wider spread than structural dead because a
+wearing surface can be resurfaced several times over a bridge's life."""
+
+GAMMA_TRAFFIC_ULS = 1.8
+"""Road traffic actions at ULS. [VECTOR] UNCONFIRMED."""
+
+GAMMA_TRAFFIC_SLS = 1.0
+GAMMA_BRAKING_ULS = 1.8
 
 
-def as5100_uls() -> tuple[LoadCombination, ...]:
+def as5100_uls(
+    include_braking: bool = True,
+) -> tuple[LoadCombination, ...]:
     """Ultimate limit state combinations to AS 5100.2:2017.
 
-    Raises
-    ------
-    NotImplementedError
-        Always, for now. Failing loudly is the point: a bridge combination set
-        that silently returned plausible-looking factors, while the traffic
-        load models behind them did not exist, would be worse than nothing.
+    Basis
+    -----
+    AS 5100.2:2017 Section 22.
+
+    [VECTOR] UNVERIFIED and UNCONFIRMED -- every factor. These have not been
+             transcribed from the printed standard.
+
+    [ENVELOPE] Road traffic and permanent effects only. Does NOT include:
+               wind, thermal, differential settlement, shrinkage and creep,
+               earthquake, collision, construction or flood actions, nor the
+               heavy load platform (HLP) cases. A bridge design needs those;
+               this returns the gravity-and-traffic subset.
+
+    Parameters
+    ----------
+    include_braking:
+        Whether to include the braking/traction combination.
+
+    Returns
+    -------
+    tuple[LoadCombination, ...]
 
     Notes
     -----
-    When built, this needs: permanent effects with separate factors for
-    concrete/steel/superimposed dead, the traffic load models with their
-    accompanying lane factors and dynamic load allowance, braking and
-    centrifugal forces, and the differing factors for the various ULS cases.
+    The minimum permanent factors exist to catch reversal: a deck cantilever
+    or an integral abutment can be governed by the case where the dead load is
+    LOW and the traffic is high, which the maximum factors would never find.
     """
-    raise NotImplementedError(
-        "AS 5100.2 load combinations are not implemented. The traffic load "
-        "models (M1600, S1600, A160, W80, HLP) that they depend on are not "
-        "built yet -- see austruct/loads/as5100_2/. Use as1170_uls() for "
-        "building structures, or supply combinations explicitly."
-    )
+    combos = [
+        LoadCombination(
+            "B-ULS1",
+            {ActionType.G: GAMMA_G_CONCRETE_MAX},
+            LimitState.ULS,
+            CLAUSE_BRIDGE_ULS,
+            f"{GAMMA_G_CONCRETE_MAX:g}G  (permanent only)",
+        ),
+        LoadCombination(
+            "B-ULS2",
+            {
+                ActionType.G: GAMMA_G_CONCRETE_MAX,
+                ActionType.Traffic: GAMMA_TRAFFIC_ULS,
+            },
+            LimitState.ULS,
+            CLAUSE_BRIDGE_ULS,
+            f"{GAMMA_G_CONCRETE_MAX:g}G + {GAMMA_TRAFFIC_ULS:g}Traffic",
+        ),
+        LoadCombination(
+            "B-ULS3",
+            {
+                ActionType.G: GAMMA_G_CONCRETE_MIN,
+                ActionType.Traffic: GAMMA_TRAFFIC_ULS,
+            },
+            LimitState.ULS,
+            CLAUSE_BRIDGE_ULS,
+            f"{GAMMA_G_CONCRETE_MIN:g}G + {GAMMA_TRAFFIC_ULS:g}Traffic  (reversal)",
+        ),
+    ]
+    if include_braking:
+        combos.append(
+            LoadCombination(
+                "B-ULS4",
+                {
+                    ActionType.G: GAMMA_G_CONCRETE_MAX,
+                    ActionType.Traffic: GAMMA_TRAFFIC_ULS,
+                    ActionType.Braking: GAMMA_BRAKING_ULS,
+                },
+                LimitState.ULS,
+                CLAUSE_BRIDGE_ULS,
+                f"{GAMMA_G_CONCRETE_MAX:g}G + {GAMMA_TRAFFIC_ULS:g}Traffic "
+                f"+ {GAMMA_BRAKING_ULS:g}Braking",
+            )
+        )
+    return tuple(combos)
 
 
 def as5100_sls() -> tuple[LoadCombination, ...]:
-    """Serviceability combinations to AS 5100.2:2017. Not implemented."""
-    raise NotImplementedError(
-        "AS 5100.2 load combinations are not implemented. See as5100_uls()."
+    """Serviceability combinations to AS 5100.2:2017.
+
+    [VECTOR] UNVERIFIED and UNCONFIRMED.
+    [ENVELOPE] As :func:`as5100_uls` -- gravity and traffic only.
+    """
+    return (
+        LoadCombination(
+            "B-SLS1",
+            {ActionType.G: 1.0},
+            LimitState.SLS,
+            CLAUSE_BRIDGE_SLS,
+            "G",
+        ),
+        LoadCombination(
+            "B-SLS2",
+            {ActionType.G: 1.0, ActionType.Traffic: GAMMA_TRAFFIC_SLS},
+            LimitState.SLS,
+            CLAUSE_BRIDGE_SLS,
+            f"G + {GAMMA_TRAFFIC_SLS:g}Traffic",
+        ),
     )
 
 

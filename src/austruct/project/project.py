@@ -39,7 +39,13 @@ from typing import Any
 
 from ..core.provenance import ASETComponent, ModuleType, Provenance
 from ..core.registry import REGISTRY
-from ..loads.combinations import LoadCombination, as1170_sls, as1170_uls
+from ..loads.combinations import (
+    LoadCombination,
+    as1170_sls,
+    as1170_uls,
+    as5100_sls,
+    as5100_uls,
+)
 
 PROVENANCE = REGISTRY.register(
     Provenance(
@@ -202,21 +208,22 @@ class Project:
     ) -> tuple[LoadCombination, ...]:
         """The combination set this project's jurisdiction and type require.
 
-        Raises
-        ------
-        NotImplementedError
-            For a bridge -- the AS 5100.2 combinations and the traffic load
-            models they need are not built. Failing here is deliberate: a
-            bridge silently getting building combinations is exactly the error
-            this record exists to prevent.
+        A bridge gets the AS 5100.2 set and a building the AS/NZS 1170.0 set.
+        Routing on the recorded structure type is the point of the record: a
+        bridge silently receiving building combinations is exactly the error
+        this is here to prevent.
+
+        [ENVELOPE] The AS 5100.2 set covers gravity and road traffic only --
+                   no wind, thermal, shrinkage, earthquake or collision. See
+                   :func:`austruct.loads.combinations.as5100_uls`.
         """
         if self.structure_type is StructureType.BRIDGE:
-            raise NotImplementedError(
-                "AS 5100.2 load combinations are not implemented, so a project "
-                "with structure_type=BRIDGE cannot produce a combination set. "
-                "See austruct.loads.combinations.as5100_uls(). Supply "
-                "combinations explicitly in the meantime."
-            )
+            out: tuple[LoadCombination, ...] = ()
+            if uls:
+                out += as5100_uls()
+            if sls:
+                out += as5100_sls()
+            return out
 
         psi_c, psi_s, psi_l = self.combination_factors()
         out: tuple[LoadCombination, ...] = ()
