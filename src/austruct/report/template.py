@@ -30,6 +30,20 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from ..core.contract import CalcResult
+from ..core.provenance import ASETComponent, ModuleType, Provenance
+from ..core.registry import REGISTRY
+
+PROVENANCE = REGISTRY.register(
+    Provenance(
+        module=__name__,
+        version="0.1.0",
+        author="A. Morrison",
+        module_type=ModuleType.B_PER_JOB,
+        component=ASETComponent.REPORTING,
+    ),
+    description="The fixed calculation report layout, independent of any renderer",
+    envelope_summary="Any CalcResult-producing module",
+)
 
 
 @dataclass

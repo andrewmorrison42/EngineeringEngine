@@ -26,9 +26,10 @@ from dataclasses import dataclass, field
 
 from ..core.basis import AS3600_2018, AS5100_5_2017, ClauseRef, Standard
 from ..core.envelope import Envelope
-from ..core.provenance import ModuleType, Provenance
+from ..core.provenance import ASETComponent, ModuleType, Provenance
 from ..core.registry import REGISTRY
 from ..core.units import U_DENSITY, U_STRESS
+from . import _data
 
 PROVENANCE = REGISTRY.register(
     Provenance(
@@ -36,6 +37,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.A_TABULATED,
+        component=ASETComponent.REFERENCE_DATA,
     ),
     description="Concrete grade properties to AS 3600 Table 3.1.2 and Section 3.1",
     envelope_summary="20 <= f'c <= 100 MPa (AS 3600); 25 <= f'c <= 100 MPa (AS 5100.5)",
@@ -44,7 +46,14 @@ PROVENANCE = REGISTRY.register(
 
 # ---------------------------------------------------------------------------
 # [BASIS]  AS 3600:2018 Table 3.1.2 -- properties of standard concrete grades.
-# [VECTOR] UNVERIFIED. Transcribed from the standard; check every row.
+#
+# The table itself lives in materials/data/concrete_grades.json, not here.
+# ASET component 1 calls for reference data in a text format that can be
+# loaded and queried in one or two calls -- and, more importantly, it puts the
+# numbers somewhere an engineer can check and sign off without reading Python.
+# See materials/_data.py.
+#
+# [VECTOR] UNVERIFIED. Check every row in the data file against the standard.
 #
 # Columns:  f'c   -- characteristic compressive strength at 28 days (MPa)
 #           fcmi  -- mean in-situ compressive strength at 28 days (MPa)
@@ -55,15 +64,8 @@ PROVENANCE = REGISTRY.register(
 # other density use the Cl 3.1.2 expression -- see `elastic_modulus`.
 # ---------------------------------------------------------------------------
 _TABLE_3_1_2: dict[int, tuple[float, float, float]] = {
-    # f'c:  (fcmi,  fcm,   Ec)
-    20: (22.0, 25.0, 24_000.0),
-    25: (28.0, 31.0, 26_700.0),
-    32: (35.0, 39.0, 30_100.0),
-    40: (43.0, 48.0, 32_800.0),
-    50: (53.0, 59.0, 34_800.0),
-    65: (68.0, 75.0, 37_400.0),
-    80: (82.0, 91.0, 39_600.0),
-    100: (99.0, 110.0, 42_200.0),
+    int(row["fc"]): (float(row["fcmi"]), float(row["fcm"]), float(row["Ec"]))
+    for row in _data.load("concrete_grades.json")["grades"]
 }
 
 STANDARD_GRADES: tuple[int, ...] = tuple(sorted(_TABLE_3_1_2))

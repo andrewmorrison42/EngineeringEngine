@@ -19,7 +19,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .provenance import ModuleType, Provenance, VerificationStatus
+from .provenance import (
+    ASET_COMPONENT_NAMES,
+    ASETComponent,
+    ModuleType,
+    Provenance,
+    VerificationStatus,
+)
 
 
 @dataclass
@@ -68,6 +74,36 @@ class ModuleRegistry:
 
     def by_type(self, module_type: ModuleType) -> list[RegistryEntry]:
         return [e for e in self.entries.values() if e.provenance.module_type is module_type]
+
+    def by_component(self, component: ASETComponent) -> list[RegistryEntry]:
+        """Modules belonging to one ASET component."""
+        return [e for e in self.entries.values() if e.provenance.component is component]
+
+    def coverage(self) -> str:
+        """Build-out across the six ASET components.
+
+        Answers "what have we actually got?", as distinct from
+        :meth:`summary`, which answers "what have we verified?". The framework
+        is only actionable if you can see which components are thin.
+        """
+        lines = ["ASET component coverage", "-" * 52]
+        for component in (
+            ASETComponent.REFERENCE_DATA,
+            ASETComponent.PROJECT_DATA,
+            ASETComponent.DEMAND,
+            ASETComponent.DESIGN_DOCUMENTATION,
+            ASETComponent.VERIFICATION,
+            ASETComponent.REPORTING,
+            ASETComponent.INFRASTRUCTURE,
+        ):
+            entries = self.by_component(component)
+            name = ASET_COMPONENT_NAMES[component]
+            label = f"{component.value}. {name}" if component.value != "0" else name
+            marker = "--" if not entries else f"{len(entries):2d}"
+            lines.append(f"  [{marker}]  {label}")
+            for entry in sorted(entries, key=lambda e: e.key):
+                lines.append(f"          {entry.key.replace('austruct.', '')}")
+        return "\n".join(lines)
 
     def unverified(self) -> list[RegistryEntry]:
         """Modules not yet cleared for issue -- the catalog entry blocklist."""

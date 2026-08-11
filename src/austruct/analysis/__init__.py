@@ -25,6 +25,13 @@ from .closed_form import (
     ss_offset_point,
     ss_udl,
 )
+from .envelope import (
+    ActionEnvelope,
+    BeamEnvelope,
+    ReactionEnvelope,
+    analyse_combinations,
+    envelope_by_limit_state,
+)
 from .loading import (
     UDL,
     AppliedMoment,
@@ -59,6 +66,12 @@ __all__ = [
     "solve",
     "BeamResults",
     "Reaction",
+    # envelopes across load combinations
+    "analyse_combinations",
+    "envelope_by_limit_state",
+    "BeamEnvelope",
+    "ActionEnvelope",
+    "ReactionEnvelope",
     # closed form benchmarks
     "ClosedFormResult",
     "ss_udl",

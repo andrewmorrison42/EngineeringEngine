@@ -1,0 +1,20 @@
+{
+  "_comment": [
+    "Standard reinforcing bar diameters to AS/NZS 4671.",
+    "",
+    "REFERENCE DATA (ASET component 1). Edit this file to match what the office",
+    "actually stocks and specifies -- carrying sizes nobody can buy produces",
+    "undeliverable designs, and this is the file to prune to prevent that.",
+    "",
+    "fitment_diameters restricts the search space when proposing ligatures, so",
+    "that a bar-arrangement query cannot suggest 36 mm ligatures."
+  ],
+  "source": "AS/NZS 4671:2019",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {"diameters": "mm"},
+  "deformed_diameters": [10, 12, 16, 20, 24, 28, 32, 36, 40],
+  "plain_diameters": [6, 10, 12, 16, 20, 24],
+  "fitment_diameters": [10, 12, 16, 20]
+}

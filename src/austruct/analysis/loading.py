@@ -27,7 +27,8 @@ in an upward-positive frame and converts once, at a single point, in
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import ClassVar
 
 from ..core.exceptions import ModelError
 
@@ -49,6 +50,34 @@ class Load(ABC):
     """
 
     label: str = ""
+
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ()
+    """Fields multiplied by a load factor. Declared per subclass so that
+    :meth:`scale` lives in one place rather than being reimplemented seven
+    times -- and so that adding a load type with an unscaled field (a position,
+    an extent) cannot silently scale it."""
+
+    def scale(self, factor: float) -> Load:
+        """Return a copy with every magnitude multiplied by ``factor``.
+
+        This is what a load combination does to a load case: 1.2 G means every
+        load in the permanent case scaled by 1.2. Positions and extents are
+        untouched.
+
+        Raises
+        ------
+        NotImplementedError
+            If the subclass has not declared which of its fields scale. Failing
+            loudly is deliberate -- a load type that silently refused to scale
+            would drop out of every factored combination.
+        """
+        if not self._SCALABLE_FIELDS:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not declare _SCALABLE_FIELDS, so it "
+                "cannot be used in a load combination."
+            )
+        updates = {name: getattr(self, name) * factor for name in self._SCALABLE_FIELDS}
+        return replace(self, **updates)
 
     @abstractmethod
     def mesh_points(self) -> list[float]:
@@ -126,6 +155,8 @@ class PointLoad(Load):
     position: float = 0.0
     magnitude: float = 0.0
 
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ("magnitude",)
+
     def mesh_points(self) -> list[float]:
         return [self.position]
 
@@ -162,6 +193,8 @@ class AppliedMoment(Load):
 
     position: float = 0.0
     magnitude: float = 0.0
+
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ("magnitude",)
 
     def mesh_points(self) -> list[float]:
         return [self.position]
@@ -208,6 +241,8 @@ class UDL(Load):
     magnitude: float = 0.0
     length: float = 0.0
 
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ("magnitude",)
+
     def mesh_points(self) -> list[float]:
         return [0.0, self.length]
 
@@ -250,6 +285,8 @@ class PartialUDL(Load):
     start: float = 0.0
     end: float = 0.0
     magnitude: float = 0.0
+
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ("magnitude",)
 
     def __post_init__(self) -> None:
         if self.end <= self.start:
@@ -308,6 +345,8 @@ class VaryingUDL(Load):
     end: float = 0.0
     w_start: float = 0.0
     w_end: float = 0.0
+
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ("w_start", "w_end")
 
     def __post_init__(self) -> None:
         if self.end <= self.start:
@@ -390,11 +429,17 @@ class SelfWeight(Load):
     density: float = 2400.0
     length: float = 0.0
     gravity: float = 9.81
+    factor: float = 1.0
+    """Load factor applied by a combination. Self weight derives its
+    magnitude from area and density, so it cannot scale those directly --
+    scaling the section would be a different beam."""
+
+    _SCALABLE_FIELDS: ClassVar[tuple[str, ...]] = ("factor",)
 
     @property
     def magnitude(self) -> float:
-        """Equivalent UDL intensity (N/mm)."""
-        return self.density * self.area * self.gravity * 1e-9
+        """Equivalent UDL intensity (N/mm), including any load factor."""
+        return self.density * self.area * self.gravity * 1e-9 * self.factor
 
     def mesh_points(self) -> list[float]:
         return [0.0, self.length]

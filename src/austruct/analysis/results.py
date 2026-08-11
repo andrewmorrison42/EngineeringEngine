@@ -19,7 +19,7 @@ import numpy as np
 
 from ..core.basis import FIRST_PRINCIPLES, Basis, ClauseRef
 from ..core.contract import CalcResult, Value
-from ..core.provenance import ModuleType, Provenance, VerificationStatus
+from ..core.provenance import ASETComponent, ModuleType, Provenance, VerificationStatus
 from ..core.registry import REGISTRY
 from ..core.units import (
     U_ANGLE,
@@ -36,6 +36,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.B_PER_JOB,
+        component=ASETComponent.DEMAND,
         status=VerificationStatus.UNVERIFIED,
     ),
     description="Beam analysis result container and diagram interrogation",

@@ -26,8 +26,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from ..core.provenance import ModuleType, Provenance
+from ..core.provenance import ASETComponent, ModuleType, Provenance
 from ..core.registry import REGISTRY
+from . import _data
 
 PROVENANCE = REGISTRY.register(
     Provenance(
@@ -35,24 +36,32 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.D_EXTRACTION,
+        component=ASETComponent.REFERENCE_DATA,
     ),
     description="Standard reinforcing bar sizes, areas and arrangement queries",
     envelope_summary="Standard AS/NZS 4671 bar diameters only",
 )
 
 # ---------------------------------------------------------------------------
-# [BASIS]  AS/NZS 4671 -- standard deformed bar diameters (mm).
-# [VECTOR] UNVERIFIED. Confirm the sizes actually stocked/specified by the
-#          office; carrying sizes nobody can buy produces undeliverable designs.
+# [BASIS]  AS/NZS 4671 -- standard bar diameters (mm).
+#
+# Loaded from materials/data/bar_sizes.json. Prune that file to the sizes the
+# office actually stocks: carrying sizes nobody can buy produces undeliverable
+# designs, and the data file is where a non-programmer can fix that.
+#
+# [VECTOR] UNVERIFIED.
 # ---------------------------------------------------------------------------
-DEFORMED_DIAMETERS: tuple[int, ...] = (10, 12, 16, 20, 24, 28, 32, 36, 40)
+_SIZES = _data.load("bar_sizes.json")
 
-# [BASIS]  AS/NZS 4671 -- standard plain round bar diameters (mm), fitments.
-PLAIN_DIAMETERS: tuple[int, ...] = (6, 10, 12, 16, 20, 24)
+DEFORMED_DIAMETERS: tuple[int, ...] = tuple(_SIZES["deformed_diameters"])
+"""Standard deformed bar diameters (mm)."""
 
-# Sizes normally used as fitments (ligatures/stirrups). Restricting the search
-# space here keeps `options_for_area` from proposing 36 mm ligatures.
-FITMENT_DIAMETERS: tuple[int, ...] = (10, 12, 16, 20)
+PLAIN_DIAMETERS: tuple[int, ...] = tuple(_SIZES["plain_diameters"])
+"""Standard plain round bar diameters (mm), used as fitments."""
+
+FITMENT_DIAMETERS: tuple[int, ...] = tuple(_SIZES["fitment_diameters"])
+"""Sizes normally used as fitments. Restricting the search space here keeps
+`options_for_area` from proposing 36 mm ligatures."""
 
 
 def bar_area(diameter: float) -> float:

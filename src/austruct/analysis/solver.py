@@ -127,6 +127,12 @@ def _build_mesh(beam: Beam, min_elements: int) -> np.ndarray:
         for p in load.mesh_points():
             if 0.0 <= p <= beam.length:
                 critical.add(float(p))
+    # Positions the caller has asked for regardless of this load set -- see
+    # Beam.extra_mesh_points. This is what lets an envelope across load
+    # combinations share one exact grid.
+    for p in beam.extra_mesh_points:
+        if 0.0 <= p <= beam.length:
+            critical.add(float(p))
 
     nodes = sorted(critical)
 
@@ -357,10 +363,22 @@ def _diagram_positions(beam: Beam, nodes: np.ndarray) -> np.ndarray:
         discontinuities.update(p for p, _ in load.point_moments())
         discontinuities.update(load.mesh_points())
 
+    # Caller-requested positions are treated as discontinuities too. Without
+    # this, two load combinations sharing a node set would still be sampled at
+    # different positions -- a combination that omits a point load would not
+    # get the pair of points either side of it -- and could not be enveloped
+    # element-wise. See Beam.extra_mesh_points.
+    discontinuities.update(beam.extra_mesh_points)
+
+    # Bracket every discontinuity, including one sitting on a member end. A
+    # support at x = 0 or x = L is a discontinuity like any other: the shear
+    # immediately inboard of an end support is the largest on the member and is
+    # exactly where the shear check is made, so failing to sample it reports a
+    # peak from the next node in and understates V*.
     for x in discontinuities:
-        if 0.0 < x < beam.length:
-            positions.add(float(x - _EPS))
-            positions.add(float(x + _EPS))
+        for p in (x - _EPS, x + _EPS):
+            if 0.0 <= p <= beam.length:
+                positions.add(float(p))
 
     return np.array(sorted(p for p in positions if -_EPS <= p <= beam.length + _EPS))
 

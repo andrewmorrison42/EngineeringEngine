@@ -116,6 +116,17 @@ class Beam:
     EI: float | Callable[[float], float] | None = None
     section: RCSection | None = None
     name: str = ""
+    extra_mesh_points: tuple[float, ...] = ()
+    """Positions that must carry a mesh node regardless of the load set.
+
+    Needed when several load combinations are enveloped against each other: if
+    each combination meshed only around its own loads, the resulting diagrams
+    would sit on different x grids and could only be compared by interpolating
+    -- which loses exactly the discontinuities an envelope must capture. Giving
+    every combination the union of all mesh points makes the envelope
+    element-wise and exact. See :mod:`austruct.analysis.envelope`.
+    """
+
     metadata: dict = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:

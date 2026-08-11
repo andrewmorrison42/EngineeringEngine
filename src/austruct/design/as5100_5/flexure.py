@@ -27,7 +27,7 @@ from __future__ import annotations
 from ...core.basis import Basis, ClauseRef
 from ...core.contract import CalcResult, Check, Value
 from ...core.envelope import Envelope
-from ...core.provenance import ModuleType, Provenance, VerificationStatus
+from ...core.provenance import ASETComponent, ModuleType, Provenance, VerificationStatus
 from ...core.registry import REGISTRY
 from ...core.units import (
     U_AREA,
@@ -49,6 +49,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.B_PER_JOB,
+        component=ASETComponent.VERIFICATION,
         status=VerificationStatus.UNVERIFIED,
     ),
     description="Ultimate flexural capacity of RC sections to AS 5100.5:2017",

@@ -60,6 +60,58 @@ class ModuleType(str, Enum):
     D_EXTRACTION = "D"  # Extraction & scheduling, reconciliation checks
 
 
+class ASETComponent(str, Enum):
+    """Which of the six ASET components a module belongs to.
+
+    From Connor Ferster, *The Anatomy of Your Automated Structural Engineering
+    Toolkit* (2025). The six components are a framework for seeing where each
+    tool sits in the whole, which is what makes building one out "manageable,
+    coherent, and most importantly, actionable".
+
+    Recorded per module so that :meth:`ModuleRegistry.coverage` can report which
+    components are built out and which are still thin -- the register answers
+    "what have we actually got?" rather than only "what have we verified?".
+    """
+
+    REFERENCE_DATA = "1"
+    """Static data you look up. Loadable and queryable in one or two calls."""
+
+    PROJECT_DATA = "2"
+    """Client-supplied information, and what is derived from it."""
+
+    DEMAND = "3"
+    """Fast demand calculation -- pre-processing, analysis, post-processing and
+    enveloping of results, in a form that permits fast design iteration."""
+
+    DESIGN_DOCUMENTATION = "4"
+    """Plain-text formats describing design decisions -- human AND machine
+    readable, so a schedule can be reviewed by an engineer and consumed by a
+    program without being written twice."""
+
+    VERIFICATION = "5"
+    """Capacity determination and the comparison of demand against capacity,
+    coordinating input data across the other domains."""
+
+    REPORTING = "6"
+    """Generation of documents and drawings for record or deliverable."""
+
+    INFRASTRUCTURE = "0"
+    """Not one of the six. The cross-cutting contract that lets components 1-6
+    exchange data -- what component 5 calls "an over-arching structure to
+    coordinate the retrieval of information from the multiple domains"."""
+
+
+ASET_COMPONENT_NAMES: dict[ASETComponent, str] = {
+    ASETComponent.INFRASTRUCTURE: "Infrastructure (cross-cutting)",
+    ASETComponent.REFERENCE_DATA: "Reference data",
+    ASETComponent.PROJECT_DATA: "Project data",
+    ASETComponent.DEMAND: "Fast demand calculation",
+    ASETComponent.DESIGN_DOCUMENTATION: "Design documentation",
+    ASETComponent.VERIFICATION: "Design verification",
+    ASETComponent.REPORTING: "Reporting and documentation",
+}
+
+
 # ---------------------------------------------------------------------------
 # Strict mode. Process-wide, deliberately -- this is a deployment posture, not
 # a per-call option, and making it per-call invites it being switched off at
@@ -144,6 +196,9 @@ class Provenance:
 
     author: str
     module_type: ModuleType = ModuleType.B_PER_JOB
+    component: ASETComponent = ASETComponent.VERIFICATION
+    """Which of the six ASET components this module belongs to."""
+
     status: VerificationStatus = VerificationStatus.UNVERIFIED
     checker: str | None = None
     checked_on: date | None = None
@@ -182,6 +237,7 @@ class Provenance:
         lines = [
             f"Module:      {self.module} v{self.version}",
             f"Type:        {self.module_type.value} ({self.module_type.name})",
+            f"ASET:        {self.component.value} -- {ASET_COMPONENT_NAMES[self.component]}",
             f"Author:      {self.author}",
             f"Status:      {self.status.value}",
         ]

@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ..core.basis import AS3600_2018, AS4671_2019, ClauseRef
-from ..core.provenance import ModuleType, Provenance
+from ..core.provenance import ASETComponent, ModuleType, Provenance
 from ..core.registry import REGISTRY
+from . import _data
 
 PROVENANCE = REGISTRY.register(
     Provenance(
@@ -21,6 +22,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.A_TABULATED,
+        component=ASETComponent.REFERENCE_DATA,
     ),
     description="Reinforcing steel grades and ductility classes to AS/NZS 4671",
     envelope_summary="Grades R250N, D500N, D500L as tabulated",
@@ -123,40 +125,31 @@ class Reinforcement:
 
 ES_DEFAULT = 200_000.0
 
-D500N = Reinforcement(
-    name="D500N",
-    fsy=500.0,
-    Es=ES_DEFAULT,
-    ductility=Ductility.N,
-    deformed=True,
-    fsu=540.0,
-    uniform_elongation=0.05,
-)
+# Grades are loaded from materials/data/reinforcement_grades.json. See
+# concrete.py for why the tables live in data files rather than in Python.
+GRADES: dict[str, Reinforcement] = {
+    row["name"]: Reinforcement(
+        name=row["name"],
+        fsy=float(row["fsy"]),
+        Es=float(row["Es"]),
+        ductility=Ductility(row["ductility"]),
+        deformed=bool(row["deformed"]),
+        fsu=float(row.get("fsu", 0.0)),
+        uniform_elongation=float(row.get("uniform_elongation", 0.0)),
+    )
+    for row in _data.load("reinforcement_grades.json")["grades"]
+}
+
+D500N = GRADES["D500N"]
 """Grade 500 MPa normal-ductility deformed bar. The default for everything."""
 
-D500L = Reinforcement(
-    name="D500L",
-    fsy=500.0,
-    Es=ES_DEFAULT,
-    ductility=Ductility.L,
-    deformed=True,
-    fsu=515.0,
-    uniform_elongation=0.015,
-)
+D500L = GRADES["D500L"]
 """Grade 500 MPa low-ductility -- welded wire mesh. Restricted application."""
 
-R250N = Reinforcement(
-    name="R250N",
-    fsy=250.0,
-    Es=ES_DEFAULT,
-    ductility=Ductility.N,
-    deformed=False,
-    fsu=320.0,
-    uniform_elongation=0.05,
-)
+R250N = GRADES["R250N"]
 """Grade 250 MPa plain round bar. Fitments and dowels."""
 
-GRADES: dict[str, Reinforcement] = {g.name: g for g in (D500N, D500L, R250N)}
+
 
 # The overwhelmingly common case, named so calling code reads clearly.
 DEFAULT_MAIN_BAR = D500N

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from ..core.basis import AS3600_2018, ClauseRef
 from ..core.exceptions import ConvergenceError
-from ..core.provenance import ModuleType, Provenance
+from ..core.provenance import ASETComponent, ModuleType, Provenance
 from ..core.registry import REGISTRY
 from .rc_section import RCSection
 
@@ -27,6 +27,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.B_PER_JOB,
+        component=ASETComponent.VERIFICATION,
     ),
     description="Transformed and cracked section properties for RC sections",
     envelope_summary="Linear elastic materials; concrete tension ignored when cracked",

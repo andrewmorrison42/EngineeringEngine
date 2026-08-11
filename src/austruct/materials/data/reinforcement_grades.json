@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "AS/NZS 4671 reinforcement grades, as invoked by AS 3600 Section 3.2.",
+    "",
+    "REFERENCE DATA (ASET component 1). See concrete_grades.json for the",
+    "verification stance -- it applies identically here.",
+    "",
+    "fsu and uniform_elongation are recorded from the grade designation and are",
+    "the values most in need of checking; nothing in the current package uses",
+    "them, but a future strut-and-tie or anchorage module will."
+  ],
+  "source": "AS/NZS 4671:2019; Es from AS 3600:2018 Cl 3.2.2",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {"fsy": "MPa", "Es": "MPa", "fsu": "MPa"},
+  "grades": [
+    {"name": "D500N", "fsy": 500, "Es": 200000, "ductility": "N", "deformed": true,  "fsu": 540, "uniform_elongation": 0.05,  "note": "Grade 500 normal-ductility deformed bar. The default."},
+    {"name": "D500L", "fsy": 500, "Es": 200000, "ductility": "L", "deformed": true,  "fsu": 515, "uniform_elongation": 0.015, "note": "Welded wire mesh. Restricted application; lower phi."},
+    {"name": "R250N", "fsy": 250, "Es": 200000, "ductility": "N", "deformed": false, "fsu": 320, "uniform_elongation": 0.05,  "note": "Plain round bar. Fitments and dowels."}
+  ]
+}

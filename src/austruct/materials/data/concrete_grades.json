@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "AS 3600:2018 Table 3.1.2 -- properties of standard-strength concrete.",
+    "",
+    "This file is REFERENCE DATA (ASET component 1). It is deliberately held as",
+    "a data file rather than in Python so that it can be checked, corrected and",
+    "signed off by an engineer who does not read code.",
+    "",
+    "VERIFICATION: set status to VERIFIED and fill in checked_by/checked_on only",
+    "after every row has been confirmed against the printed standard. Until then",
+    "every number below is UNVERIFIED and must not be relied on for issue.",
+    "",
+    "Ec here is the TABULATED value, which assumes a density of 2400 kg/m^3.",
+    "For any other density the Cl 3.1.2 expression is used instead."
+  ],
+  "source": "AS 3600:2018 Table 3.1.2",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {"fc": "MPa", "fcmi": "MPa", "fcm": "MPa", "Ec": "MPa"},
+  "grades": [
+    {"fc": 20,  "fcmi": 22, "fcm": 25,  "Ec": 24000},
+    {"fc": 25,  "fcmi": 28, "fcm": 31,  "Ec": 26700},
+    {"fc": 32,  "fcmi": 35, "fcm": 39,  "Ec": 30100},
+    {"fc": 40,  "fcmi": 43, "fcm": 48,  "Ec": 32800},
+    {"fc": 50,  "fcmi": 53, "fcm": 59,  "Ec": 34800},
+    {"fc": 65,  "fcmi": 68, "fcm": 75,  "Ec": 37400},
+    {"fc": 80,  "fcmi": 82, "fcm": 91,  "Ec": 39600},
+    {"fc": 100, "fcmi": 99, "fcm": 110, "Ec": 42200}
+  ]
+}

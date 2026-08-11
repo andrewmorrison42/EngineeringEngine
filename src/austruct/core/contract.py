@@ -28,8 +28,21 @@ from typing import Any
 
 from .basis import Basis, ClauseRef
 from .envelope import Envelope
-from .provenance import Provenance
+from .provenance import ASETComponent, ModuleType, Provenance
+from .registry import REGISTRY
 from .units import U_NONE
+
+PROVENANCE = REGISTRY.register(
+    Provenance(
+        module=__name__,
+        version="0.1.0",
+        author="A. Morrison",
+        module_type=ModuleType.B_PER_JOB,
+        component=ASETComponent.INFRASTRUCTURE,
+    ),
+    description="The calculation contract every module emits",
+    envelope_summary="Not a calculation -- the shape the others share",
+)
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,8 @@ into a program.
     L1  materials   concrete, reinforcement, bar catalogue
     L2  sections    geometry primitives, RC sections, section properties
     L3  analysis    beam models, stiffness solver, closed-form cases
+    L2b design_documentation  plain-text designations and member schedules
+    L1b project     project record: site, occupancy, exposure, derived factors
     L3b loads       load combinations, AS 5100.2 traffic loads
     L4  design      code checks: as3600/, as5100_5/, over shared rc_common/
     L5  report      the audit artifact
@@ -27,7 +29,17 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
-from . import analysis, core, design, materials, report, sections
+from . import (
+    analysis,
+    core,
+    design,
+    design_documentation,
+    loads,
+    materials,
+    project,
+    report,
+    sections,
+)
 from .core import (
     REGISTRY,
     CalcResult,
@@ -45,7 +57,10 @@ __all__ = [
     "materials",
     "sections",
     "analysis",
+    "loads",
+    "project",
     "design",
+    "design_documentation",
     "report",
     "CalcResult",
     "Value",

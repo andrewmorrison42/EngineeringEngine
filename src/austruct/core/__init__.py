@@ -24,6 +24,8 @@ from .exceptions import (
     UnverifiedConstant,
 )
 from .provenance import (
+    ASET_COMPONENT_NAMES,
+    ASETComponent,
     GoldenVector,
     ModuleType,
     Provenance,
@@ -54,6 +56,8 @@ __all__ = [
     "Provenance",
     "VerificationStatus",
     "ModuleType",
+    "ASETComponent",
+    "ASET_COMPONENT_NAMES",
     "GoldenVector",
     "strict_mode",
     # registry

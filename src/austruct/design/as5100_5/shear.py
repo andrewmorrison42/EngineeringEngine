@@ -31,7 +31,7 @@ import math
 from ...core.basis import Basis, ClauseRef
 from ...core.contract import CalcResult, Check, Value
 from ...core.envelope import Envelope
-from ...core.provenance import ModuleType, Provenance, VerificationStatus
+from ...core.provenance import ASETComponent, ModuleType, Provenance, VerificationStatus
 from ...core.registry import REGISTRY
 from ...core.units import U_AREA, U_FORCE, U_LENGTH, U_NONE, U_STRESS, kN, to_deg
 from ...materials.concrete import FC_MAX_AS5100, FC_MIN_AS5100
@@ -44,6 +44,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.B_PER_JOB,
+        component=ASETComponent.VERIFICATION,
         status=VerificationStatus.UNVERIFIED,
     ),
     description="Shear capacity of RC beams to AS 5100.5:2017 (AS 3600:2009 family)",
