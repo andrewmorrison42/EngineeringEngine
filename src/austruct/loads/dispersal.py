@@ -50,11 +50,15 @@ right and needs no special case.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..analysis.loading import UDL, Load, LoadTrain, PartialUDL
 from ..core.exceptions import ModelError
 from ..core.provenance import ASETComponent, ModuleType, Provenance
 from ..core.registry import REGISTRY
+
+if TYPE_CHECKING:  # pragma: no cover -- avoids importing the catalogue eagerly
+    from .as5100_2.traffic import LoadModel
 
 PROVENANCE = REGISTRY.register(
     Provenance(
@@ -386,3 +390,213 @@ def buried_structure_loads(
             loads.append(patch)
 
     return tuple(loads)
+
+
+# ---------------------------------------------------------------------------
+# Model-aware dispersal
+#
+# The methods below take a LoadModel and read the wheel geometry off it, so no
+# call site restates a contact patch or a wheel spacing. They also do the
+# TRANSVERSE bookkeeping properly, which the wheel-at-a-time primitives above
+# cannot: those assume the wheel is centred on the strip, whereas a real axle
+# has two wheels 2 m apart and only part of each lands on a 1 m strip.
+# ---------------------------------------------------------------------------
+
+
+def _overlap(lo_a: float, hi_a: float, lo_b: float, hi_b: float) -> float:
+    """Length shared by two intervals. Zero if they do not meet."""
+    return max(0.0, min(hi_a, hi_b) - max(lo_a, lo_b))
+
+
+def _carried_width(
+    fill: FillDispersal,
+    wheel_y: float,
+    contact_width: float,
+    strip_offset: float,
+) -> float:
+    """Transverse width of one wheel's dispersed patch that lands on the strip.
+
+    The strip spans ``strip_offset +/- effective_width/2`` measured from the
+    VEHICLE CENTRELINE, and the wheel's dispersed patch spans
+    ``wheel_y +/- dispersed_width/2``. The overlap is what the strip carries.
+
+    This is the piece the single-wheel primitive cannot do: it takes
+    ``min(dispersed_width, effective_width)``, which is right only for a wheel
+    centred on the strip.
+    """
+    dispersed = fill.spread(contact_width)
+    half_strip = fill.effective_width / 2.0
+    return _overlap(
+        wheel_y - dispersed / 2.0,
+        wheel_y + dispersed / 2.0,
+        strip_offset - half_strip,
+        strip_offset + half_strip,
+    )
+
+
+def _axle_intensity(
+    fill: FillDispersal,
+    model: LoadModel,
+    axle_load: float,
+    strip_offset: float,
+) -> float:
+    """Line load on the strip from one dispersed axle (N/mm).
+
+    Sums every wheel on the axle: each carries ``axle_load / n_per_axle``,
+    disperses to the same patch size, and contributes in proportion to how much
+    of its patch falls on the strip.
+    """
+    wheel = model.wheel
+    length = fill.spread(wheel.contact_length)
+    width = fill.spread(wheel.contact_width)
+    pressure = wheel.wheel_load(axle_load) / (length * width)
+
+    return pressure * sum(
+        _carried_width(fill, y, wheel.contact_width, strip_offset)
+        for y in wheel.transverse_positions()
+    )
+
+
+def _resolve_offset(
+    fill: FillDispersal, model: LoadModel, strip_offset: float | str
+) -> float:
+    """Turn ``"worst"`` into a number, or pass a stated offset through."""
+    if isinstance(strip_offset, str):
+        if strip_offset != "worst":
+            raise ValueError(
+                f"strip_offset must be a number or 'worst', got {strip_offset!r}"
+            )
+        return _worst_strip_offset(fill, model)
+    return float(strip_offset)
+
+
+def _disperse_model(
+    fill: FillDispersal,
+    model: LoadModel,
+    datum: float,
+    member_length: float,
+    strip_offset: float | str = "worst",
+) -> tuple[Load, ...]:
+    """Every axle of a model, dispersed onto the member at a fixed position.
+
+    Parameters
+    ----------
+    strip_offset:
+        Transverse position of the strip relative to the vehicle centreline
+        (mm), or ``"worst"`` to search for the position carrying most.
+
+    [ASSUMPTION] ``"worst"`` is the DEFAULT, and deliberately so. Centring the
+                 strip on the vehicle centreline is the obvious default and the
+                 wrong one: for a two-wheel axle at 2 m spacing under shallow
+                 fill, the two dispersed patches sit either side of the
+                 centreline and a 1 m strip there carries NOTHING. Defaulting
+                 to zero offset would quietly return a zero design load. The
+                 governing strip is what a design needs, so that is what is
+                 returned unless a position is stated.
+    """
+    strip_offset = _resolve_offset(fill, model, strip_offset)
+    length = fill.spread(model.wheel.contact_length)
+    loads: list[Load] = []
+
+    for i, (offset, axle_load) in enumerate(model.train.axles, start=1):
+        centre = datum + offset
+        start = max(0.0, centre - length / 2.0)
+        end = min(member_length, centre + length / 2.0)
+        if end - start <= 1e-9:
+            continue
+        intensity = _axle_intensity(fill, model, axle_load, strip_offset)
+        if intensity <= 0.0:
+            continue
+        loads.append(
+            PartialUDL(
+                start=start,
+                end=end,
+                magnitude=intensity,
+                label=f"{model.name} axle {i}",
+            )
+        )
+    return tuple(loads)
+
+
+def _dispersed_model_train(
+    fill: FillDispersal,
+    model: LoadModel,
+    strip_offset: float | str = "worst",
+) -> LoadTrain:
+    """A still-positionable train with the dispersal baked in.
+
+    Hand this to :func:`~austruct.analysis.moving.moving_load_envelope` and the
+    sweep finds the worst position of the DISPERSED vehicle, rather than of the
+    point loads it started as.
+
+    [ASSUMPTION] The lane or track UDL is shared onto the strip by width --
+                 ``udl * min(strip, loaded_width) / loaded_width`` -- rather
+                 than being dispersed again. It is already spread over the full
+                 lane width, so fill changes it very little; what matters is
+                 how much of the lane the strip sees. A strip wider than the
+                 lane gets one lane's worth, not more: a second lane needs the
+                 accompanying lane factors, which are a separate decision.
+    """
+    strip_offset = _resolve_offset(fill, model, strip_offset)
+    wheel = model.wheel
+    length = fill.spread(wheel.contact_length)
+
+    segments = [
+        (
+            offset - length / 2.0,
+            offset + length / 2.0,
+            _axle_intensity(fill, model, axle_load, strip_offset),
+        )
+        for offset, axle_load in model.train.axles
+    ]
+
+    udl_share = (
+        min(fill.effective_width, model.loaded_width) / model.loaded_width
+        if model.loaded_width > 0
+        else 1.0
+    )
+
+    return LoadTrain(
+        name=f"{model.train.name} dispersed through {fill.depth:.0f} mm fill",
+        axles=(),
+        udl_segments=tuple(s for s in segments if s[2] > 0.0),
+        length=model.train.length,
+        trailing_udl=model.train.trailing_udl * udl_share,
+    )
+
+
+def _worst_strip_offset(
+    fill: FillDispersal,
+    model: LoadModel,
+    candidates: int = 41,
+) -> float:
+    """Transverse strip position carrying the most load from one axle (mm).
+
+    Under shallow fill the wheel patches are separate, so a strip under a wheel
+    line carries far more than one straddling the middle of the axle; under
+    deep fill they merge and the centre governs. Which one applies depends on
+    the fill depth, so it is worth searching rather than assuming.
+
+    Returns the offset from the vehicle centreline.
+    """
+    wheel = model.wheel
+    span = max(wheel.transverse_positions()) if wheel.n_per_axle > 1 else 0.0
+    reach = span + fill.spread(wheel.contact_width) / 2.0
+    step = 2 * reach / max(candidates - 1, 1) if reach > 0 else 0.0
+
+    best_offset, best = 0.0, -1.0
+    for i in range(candidates):
+        offset = -reach + i * step
+        carried = _axle_intensity(fill, model, model.axle_load or 1.0, offset)
+        if carried > best:
+            best_offset, best = offset, carried
+    return best_offset
+
+
+# Attached to FillDispersal rather than defined in the class body, so that the
+# class stays free of any dependency on the AS 5100.2 catalogue -- dispersal
+# through fill is a general idea, and a jurisdiction's load models are not.
+FillDispersal.disperse_model = _disperse_model  # type: ignore[attr-defined]
+FillDispersal.dispersed_model_train = _dispersed_model_train  # type: ignore[attr-defined]
+FillDispersal.worst_strip_offset = _worst_strip_offset  # type: ignore[attr-defined]
+FillDispersal.carried_width_for = _carried_width  # type: ignore[attr-defined]

@@ -11,9 +11,9 @@ Three things, in the order they build on each other:
 Run:  python examples/05_buried_structure_and_moving_load.py
 
 NOTE: the AS 5100.2 traffic geometry in this package is UNVERIFIED -- it has
-not been transcribed from the printed standard. Every call below therefore
-passes allow_unverified=True, which is the switch that makes that explicit.
-Do not use these numbers for a bridge.
+not been transcribed from the printed standard. The catalogue therefore
+refuses to hand out a model until permission is given, which this example does
+once, below. Do not use these numbers for a bridge.
 """
 
 from austruct.analysis import (
@@ -29,7 +29,9 @@ from austruct.loads import as5100_2 as traffic
 from austruct.materials import concrete
 from austruct.sections import rc_beam
 
-DEV = {"allow_unverified": True}  # see the module docstring
+# Permission to use the unverified geometry, given once for this script rather
+# than repeated at every call. See the module docstring.
+traffic.allow_unverified(True)
 
 
 def banner(text: str) -> None:
@@ -81,27 +83,33 @@ print(f"    exact wL^2/8        = {w * L**2 / 8 / kNm:.2f} kN.m")
 # ---------------------------------------------------------------------------
 banner("3 | AS 5100.2 TRAFFIC MODELS")
 # ---------------------------------------------------------------------------
-print(traffic.describe_models())
+print(traffic.catalogue())
 
-print("\nThe guard, before anything else:")
-try:
-    traffic.m1600()
-except traffic.UnverifiedLoadModel as exc:
-    print(f"  traffic.m1600() -> {type(exc).__name__}")
-    print(f"    {str(exc).splitlines()[0]}")
+print("\nNominate a model by name -- it carries its own geometry:\n")
+m1600 = traffic.get("M1600")
+print("\n".join("  " + line for line in m1600.describe()))
 
-print("\nM1600 swept over the 20 m span (dev override, DLA applied):\n")
-m1600 = traffic.with_dla(traffic.m1600(**DEV))
-print(f"  {m1600.name}: {len(m1600.axles)} axles, {m1600.total_axle_load / 1e3:.0f} kN total, "
-      f"{m1600.length / 1000:.2f} m long, UDL {m1600.trailing_udl * 1000 / 1e3:.2f} kN/m")
-
-res_m = moving_load_envelope(beam, m1600, step=250.0)
-res_s = moving_load_envelope(beam, traffic.s1600(**DEV), step=250.0)
-print(f"\n  {'model':<10}{'M* kN.m':>12}{'V* kN':>10}{'critical x':>13}")
+print("\nEvery road model swept over the 20 m span:\n")
+print(f"  {'model':<10}{'M* kN.m':>12}{'V* kN':>10}{'critical x':>13}")
 print("  " + "-" * 45)
-for label, r in (("M1600", res_m), ("S1600", res_s)):
-    print(f"  {label:<10}{r.M_star / kNm:>12.1f}{r.V_star / kN:>10.1f}"
-          f"{r.critical_position('moment') / 1000:>12.2f} m")
+for name in traffic.names("road"):
+    model = traffic.get(name)
+    r = moving_load_envelope(beam, model.train_with_dla(), step=250.0)
+    flag = "  <- placeholder geometry" if model.is_placeholder else ""
+    print(f"  {name:<10}{r.M_star / kNm:>12.1f}{r.V_star / kN:>10.1f}"
+          f"{r.critical_position('moment') / 1000:>12.2f} m{flag}")
+
+print("\n  Rail: 300LA. Its dynamic load allowance is span-dependent, so:")
+la300 = traffic.get("300LA")
+try:
+    la300.train_with_dla()
+except NotImplementedError as exc:
+    print(f"    {str(exc).splitlines()[0]}")
+r_rail = moving_load_envelope(beam, la300.train, step=250.0)
+print(f"    300LA static: M* = {r_rail.M_star / kNm:.1f} kN.m, V* = {r_rail.V_star / kN:.1f} kN")
+print(f"    250LA scales from it: {traffic.la(250).total_axle_load / kN:.0f} kN "
+      f"vs {la300.total_axle_load / kN:.0f} kN")
+
 print(f"\n  Lane factors, 3 loaded lanes: "
       f"{[traffic.lane_factor(3, i) for i in (1, 2, 3)]} "
       f"-> {traffic.total_lane_factor(3):.1f} effective lanes")
@@ -111,11 +119,15 @@ banner("4 | BURIED CULVERT TOP SLAB -- FILL + DISPERSED WHEELS")
 # ---------------------------------------------------------------------------
 SPAN = 6.0 * m
 STRIP = 1000.0  # analyse a 1 m wide strip
-wheel, contact_len, contact_wid = traffic.w80_wheel(**DEV)
+w80 = traffic.get("W80")
+wheel, contact_len, contact_wid = (
+    w80.wheel_load, w80.wheel.contact_length, w80.wheel.contact_width
+)
 
 print(f"Top slab: {SPAN / 1000:.1f} m clear span, analysed as a {STRIP / 1000:.0f} m strip.")
-print(f"Live load: W80 = {wheel / kN:.0f} kN on a "
-      f"{contact_len:.0f} x {contact_wid:.0f} mm contact patch.\n")
+print(f"Live load: {w80.name} = {wheel / kN:.0f} kN on a "
+      f"{contact_len:.0f} x {contact_wid:.0f} mm contact patch "
+      f"-- all read from the model, not restated here.\n")
 
 print(f"  {'fill':>6}{'earth':>9}{'patch':>8}{'pressure':>10}{'M_earth':>10}"
       f"{'M_wheel':>10}{'M_total':>10}{'cover':>8}")
@@ -140,9 +152,13 @@ for depth in (300, 600, 900, 1200, 2000, 3000):
           f"{fill.transverse_coverage(contact_wid):>8.2f}")
 
 best = min(rows, key=lambda r: r[1])
-print("\n  Shallow fill governs the WHEEL; deep fill governs the EARTH PRESSURE.")
-print(f"  The total has a minimum near {best[0]:.0f} mm, so BOTH extremes of the")
-print("  fill range must be checked -- neither end is automatically the worst.")
+worst = max(rows, key=lambda r: r[1])
+print("\n  The two components pull in opposite directions: the wheel effect FALLS")
+print("  with depth as the patch spreads, while the earth pressure RISES.")
+print(f"  Here the total is least at {best[0]:.0f} mm and greatest at {worst[0]:.0f} mm, so the")
+print("  deep end governs the total -- but the shallow end still governs the")
+print("  wheel, which is what the local punching and top-steel checks see.")
+print("  Sweep the whole cover range; do not assume either end is the worst.")
 
 # ---------------------------------------------------------------------------
 banner("5 | THE WHEEL AS A MOVING LOAD, AND A DESIGN CHECK")
@@ -150,12 +166,14 @@ banner("5 | THE WHEEL AS A MOVING LOAD, AND A DESIGN CHECK")
 fill = FillDispersal(depth=600, density=2000, slope=2.0, effective_width=STRIP)
 print("\n".join("  " + line for line in fill.describe()))
 
-w80_train = traffic.with_dla(traffic.w80(**DEV))
-dispersed = fill.dispersed_train(w80_train, SPAN, contact_len, contact_wid)
+# The model knows its own contact patch, so none is passed here.
+dispersed = fill.dispersed_model_train(traffic.get("A160"))
 res = moving_load_envelope(
     slab, dispersed, step=100.0, static_loads=(fill.earth_pressure_udl(),)
 )
-print(f"\n  Swept: {dispersed.name}")
+print(f"\n  Governing 1 m strip is {fill.worst_strip_offset(traffic.get('A160')):+.0f} mm "
+      f"from the vehicle centreline")
+print(f"  Swept: {dispersed.name}")
 print(f"  M* = {res.M_star / kNm:7.2f} kN.m at datum "
       f"{res.critical_position('moment') / 1000:.3f} m")
 print(f"  V* = {res.V_star / kN:7.2f} kN")

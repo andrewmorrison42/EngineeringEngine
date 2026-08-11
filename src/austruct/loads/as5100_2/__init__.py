@@ -1,42 +1,69 @@
-"""AS 5100.2:2017 road traffic actions.
+"""AS 5100.2:2017 road and rail traffic actions.
 
-Read ``data/traffic_models.json`` before using anything here: the axle
-geometry has NOT been transcribed from the printed standard, and every
-constructor refuses to build a model until it has been.
+A catalogue you nominate by name -- ``get("M1600")`` returns the vehicle with
+its axle spacings, wheel contact patch and dynamic load allowance attached, so
+no call site restates them.
+
+Read ``data/traffic_models.json`` before using anything here: the geometry has
+NOT been transcribed from the printed standard, and the catalogue refuses to
+hand out a model until you say so once with ``allow_unverified(True)``.
 """
 
 from .traffic import (
+    DATA_FILE,
+    LoadModel,
+    TrafficKind,
     UnverifiedLoadModel,
+    WheelGeometry,
     a160,
-    a160_wheels,
-    describe_models,
+    allow_unverified,
+    catalogue,
     dla,
+    get,
+    hlp,
     is_verified,
+    la,
     lane_factor,
     load_data,
     m1600,
+    names,
+    rail_dla,
+    reload,
     s1600,
     total_lane_factor,
+    unverified_ok,
     verification_status,
     w80,
-    w80_wheel,
-    with_dla,
 )
 
 __all__ = [
+    # the catalogue
+    "get",
+    "names",
+    "catalogue",
+    "LoadModel",
+    "WheelGeometry",
+    "TrafficKind",
+    # named models
     "w80",
-    "w80_wheel",
     "a160",
-    "a160_wheels",
     "m1600",
     "s1600",
+    "hlp",
+    "la",
+    # allowances and factors
     "dla",
-    "with_dla",
+    "rail_dla",
     "lane_factor",
     "total_lane_factor",
-    "describe_models",
+    # the guard
+    "allow_unverified",
+    "unverified_ok",
+    "UnverifiedLoadModel",
+    # data
     "is_verified",
     "verification_status",
     "load_data",
-    "UnverifiedLoadModel",
+    "reload",
+    "DATA_FILE",
 ]

@@ -599,6 +599,14 @@ class LoadTrain:
                 for x in (float(pos) + start_off, float(pos) + end_off):
                     if 0.0 <= x <= member_length:
                         points.add(x)
+            # The trailing UDL ends at the REAR of the train, and that end
+            # moves with the train. Omitting it gives each sweep position its
+            # own grid, and the envelope then refuses to compare them -- which
+            # is how this was found.
+            if self.trailing_udl != 0.0:
+                rear = float(pos) + self.length
+                if 0.0 <= rear <= member_length:
+                    points.add(rear)
         return tuple(sorted(points))
 
     def describe(self) -> list[str]:

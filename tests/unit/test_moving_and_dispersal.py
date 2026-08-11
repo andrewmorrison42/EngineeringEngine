@@ -211,83 +211,17 @@ def test_bad_response_and_side_raise(beam):
 
 # ---------------------------------------------------------------------------
 # AS 5100.2 traffic models
+#
+# The catalogue itself -- nominating a model by name, what each model carries,
+# and the unverified-geometry guard -- is tested in test_traffic_catalogue.py.
+# What belongs here is only the interaction between a traffic model and the
+# moving-load machinery above.
 # ---------------------------------------------------------------------------
 
 
-def test_traffic_models_refuse_to_build_while_unverified():
-    """The hardest fail-closed gate in the package: the geometry of an entire
-    load model is unverified, not merely a coefficient."""
-    assert not traffic.is_verified()
-    for factory in (traffic.m1600, traffic.s1600, traffic.w80, traffic.a160):
-        with pytest.raises(traffic.UnverifiedLoadModel, match="UNVERIFIED"):
-            factory()
-
-
-def test_traffic_models_build_with_the_explicit_override():
-    train = traffic.m1600(allow_unverified=True)
-    assert train.axles
-    assert train.total_axle_load > 0
-    assert train.trailing_udl > 0
-
-
-def test_m1600_axle_layout_matches_the_data_file():
-    data = traffic.load_data()["M1600"]
-    group = data["axle_group"]
-    train = traffic.m1600(allow_unverified=True)
-
-    assert len(train.axles) == group["n_axles"] * data["n_groups"]
-    assert all(load == pytest.approx(group["axle_load"] * kN) for _, load in train.axles)
-
-    offsets = [o for o, _ in train.axles]
-    within_group = offsets[1] - offsets[0]
-    assert within_group == pytest.approx(group["axle_spacing"])
-
-
-def test_s1600_is_heavier_in_udl_and_lighter_in_axles():
-    m = traffic.m1600(allow_unverified=True)
-    s = traffic.s1600(allow_unverified=True)
-    assert s.trailing_udl > m.trailing_udl
-    assert s.total_axle_load < m.total_axle_load
-
-
-def test_group_gap_below_the_minimum_raises():
-    with pytest.raises(ValueError, match="below the minimum"):
-        traffic.m1600(group_gap=1000.0, allow_unverified=True)
-
-
-def test_dynamic_load_allowance_scales_loads_not_geometry():
-    train = traffic.m1600(allow_unverified=True)
-    with_dla = traffic.with_dla(train)
-    alpha = traffic.dla("M1600")
-    assert with_dla.total_axle_load == pytest.approx(
-        train.total_axle_load * (1 + alpha)
-    )
-    assert [o for o, _ in with_dla.axles] == [o for o, _ in train.axles]
-    assert str(alpha) in with_dla.name or f"{alpha:g}" in with_dla.name
-
-
-def test_stationary_traffic_attracts_no_dynamic_allowance():
-    assert traffic.dla("S1600") == 0.0
-    train = traffic.s1600(allow_unverified=True)
-    assert traffic.with_dla(train) is train
-
-
-def test_lane_factors_decrease_and_the_first_lane_is_unreduced():
-    assert traffic.lane_factor(3, 1) == 1.0
-    assert traffic.lane_factor(3, 2) <= traffic.lane_factor(3, 1)
-    assert traffic.lane_factor(3, 3) <= traffic.lane_factor(3, 2)
-    assert traffic.total_lane_factor(3) < 3.0
-
-
-def test_unknown_lane_count_and_model_raise():
-    with pytest.raises(KeyError):
-        traffic.lane_factor(99)
-    with pytest.raises(KeyError):
-        traffic.dla("HLP400")
-
-
 def test_m1600_swept_over_a_span_finds_a_sensible_position(beam):
-    train = traffic.with_dla(traffic.m1600(allow_unverified=True))
+    with traffic.unverified_ok():
+        train = traffic.get("M1600").train_with_dla()
     result = moving_load_envelope(beam, train, step=500.0)
     assert result.M_star > 0
     assert 0.0 <= result.critical_position("moment") + train.length <= L + train.length
@@ -387,7 +321,8 @@ def test_overlapping_patches_superpose():
 
 def test_dispersed_train_is_still_positionable():
     fill = FillDispersal(depth=600.0, effective_width=1000.0)
-    train = traffic.m1600(allow_unverified=True)
+    with traffic.unverified_ok():
+        train = traffic.get("M1600").train
     dispersed = fill.dispersed_train(train, 20.0 * m, 250.0, 400.0)
     assert not dispersed.axles, "axles become patches"
     assert len(dispersed.udl_segments) >= len(train.axles)
