@@ -6,11 +6,29 @@ against the printed standard. The mechanics are shared with AS 5100.5 via
 """
 
 from . import constants
+from .detailing import (
+    DevelopmentLength,
+    cd_dimension,
+    check_bar_fit,
+    check_detailing,
+    compression_development_length,
+    curtailment_extension,
+    development_length,
+    lap_length,
+    minimum_clear_spacing,
+)
 from .flexure import (
     check_flexure,
     minimum_steel_area,
     moment_capacity,
     required_steel_area,
+)
+from .serviceability import (
+    check_crack_control,
+    check_deflection,
+    check_span_to_depth,
+    effective_stiffness,
+    ief_max,
 )
 from .shear import (
     check_shear,
@@ -33,4 +51,20 @@ __all__ = [
     "required_shear_reinforcement",
     "effective_shear_depth",
     "minimum_shear_reinforcement",
+    # serviceability
+    "effective_stiffness",
+    "ief_max",
+    "check_deflection",
+    "check_crack_control",
+    "check_span_to_depth",
+    # detailing and anchorage
+    "DevelopmentLength",
+    "development_length",
+    "compression_development_length",
+    "lap_length",
+    "curtailment_extension",
+    "minimum_clear_spacing",
+    "cd_dimension",
+    "check_bar_fit",
+    "check_detailing",
 ]

@@ -211,3 +211,218 @@ def cot(angle_rad: float) -> float:
     """Cotangent. Named because ``1/math.tan`` in the middle of a shear
     expression obscures which code term is being evaluated."""
     return 1.0 / math.tan(angle_rad)
+
+
+# ---------------------------------------------------------------------------
+# SERVICEABILITY -- DEFLECTION -- AS 3600:2018 Section 8.5 and Table 2.3.2
+# ---------------------------------------------------------------------------
+
+CLAUSE_DEFLECTION = ClauseRef(STANDARD, "8.5.1", note="Deflection of beams")
+CLAUSE_IEF = ClauseRef(STANDARD, "8.5.3.1", note="Effective second moment of area")
+CLAUSE_KCS = ClauseRef(STANDARD, "8.5.3.2", note="Long-term deflection multiplier")
+CLAUSE_SPAN_DEPTH = ClauseRef(STANDARD, "8.5.4", note="Deemed-to-comply span-to-depth ratio")
+CLAUSE_DEFL_LIMITS = ClauseRef(STANDARD, table="2.3.2", note="Deflection limits")
+
+IEF_EXPONENT = 3.0
+"""Exponent n in I_ef = I_cr + (I - I_cr)(M_cr/M_s)^n.
+[BASIS] Cl 8.5.3.1. [VECTOR] UNVERIFIED."""
+
+IEF_MAX_P_THRESHOLD = 0.005
+"""Reinforcement ratio p = A_st/(b d) at or above which I_ef.max is the full
+uncracked value. [BASIS] Cl 8.5.3.1. [VECTOR] UNVERIFIED."""
+
+IEF_MAX_FACTOR_HIGH_P = 1.0
+IEF_MAX_FACTOR_LOW_P = 0.6
+"""I_ef.max as a fraction of I. The reduced cap for lightly reinforced sections
+recognises that such a section loses most of its stiffness the moment it
+cracks. [BASIS] Cl 8.5.3.1. [VECTOR] UNVERIFIED -- both factors AND the
+question of whether I means the gross or the uncracked transformed value."""
+
+KCS_INTERCEPT = 2.0
+KCS_SLOPE = 1.2
+KCS_MIN = 0.8
+"""k_cs = 2 - 1.2 (A_sc/A_st) >= 0.8. [BASIS] Cl 8.5.3.2. [VECTOR] UNVERIFIED."""
+
+# -- Deflection limits, Table 2.3.2 ----------------------------------------
+# Expressed as denominators of the effective span: 250 means L_ef/250.
+# [VECTOR] UNVERIFIED -- every ratio, and the applicability of each.
+
+DEFL_TOTAL_SPAN_RATIO = 250.0
+"""Total deflection limit for a member not supporting brittle finishes,
+L_ef/250. [BASIS] Table 2.3.2. [VECTOR] UNVERIFIED."""
+
+DEFL_INCREMENTAL_BRITTLE_RATIO = 500.0
+"""Deflection occurring AFTER the addition of brittle finishes or partitions,
+L_ef/500. [BASIS] Table 2.3.2. [VECTOR] UNVERIFIED."""
+
+DEFL_INCREMENTAL_NON_BRITTLE_RATIO = 250.0
+"""As above but where the finishes are not brittle, L_ef/250.
+[BASIS] Table 2.3.2. [VECTOR] UNVERIFIED."""
+
+DEFL_CANTILEVER_SPAN_FACTOR = 2.0
+"""Multiplier applied to a cantilever's length to obtain the effective span
+used in the ratio limits. [VECTOR] UNVERIFIED -- confirm whether AS 3600
+handles cantilevers this way or by a separate ratio."""
+
+PSI_S_DEFAULT = 0.7
+PSI_L_DEFAULT = 0.4
+"""Short-term and long-term live load factors used to form the serviceability
+combinations. These are AS/NZS 1170.0 values and vary with occupancy -- the
+``project`` package supplies the real ones. These defaults exist so a
+standalone deflection check runs, and they are deliberately the office/
+residential values. [VECTOR] UNVERIFIED."""
+
+
+# ---------------------------------------------------------------------------
+# SERVICEABILITY -- CRACK CONTROL -- AS 3600:2018 Section 8.6
+# ---------------------------------------------------------------------------
+
+CLAUSE_CRACK_CONTROL = ClauseRef(STANDARD, "8.6.1", note="Crack control for flexure")
+CLAUSE_CRACK_TABLES = ClauseRef(STANDARD, table="8.6.1", note="Bar diameter and spacing limits")
+
+CRACK_MAX_BAR_SPACING = 300.0
+"""Maximum centre-to-centre spacing of tensile bars, mm.
+[BASIS] Cl 8.6.1. [VECTOR] UNVERIFIED."""
+
+CRACK_MAX_COVER_TO_BAR = 100.0
+"""Maximum distance from the section face to the nearest longitudinal bar, mm.
+[BASIS] Cl 8.6.1. [VECTOR] UNVERIFIED."""
+
+# Table 8.6.1(A): maximum bar diameter for a given steel stress.
+# Stored ascending by stress. Read as: at or below this stress, a bar of at
+# most this diameter is acceptable.
+# [VECTOR] UNVERIFIED -- every pair, and whether interpolation is permitted.
+CRACK_BAR_DIAMETER_TABLE: tuple[tuple[float, float], ...] = (
+    (150.0, 40.0),
+    (200.0, 32.0),
+    (240.0, 25.0),
+    (280.0, 20.0),
+    (320.0, 16.0),
+    (360.0, 12.0),
+    (400.0, 10.0),
+)
+
+# Table 8.6.1(B): maximum centre-to-centre bar spacing for a given steel stress.
+# [VECTOR] UNVERIFIED -- every pair.
+CRACK_BAR_SPACING_TABLE: tuple[tuple[float, float], ...] = (
+    (150.0, 300.0),
+    (200.0, 250.0),
+    (240.0, 200.0),
+    (280.0, 150.0),
+    (320.0, 100.0),
+    (360.0, 50.0),
+)
+
+CRACK_STEEL_STRESS_LIMIT_FLEXURE = 0.8
+"""Cap on service steel stress as a fraction of f_sy for flexural crack
+control where the deemed-to-comply tables are used.
+[VECTOR] UNVERIFIED -- both the existence and the value of this cap."""
+
+
+# ---------------------------------------------------------------------------
+# DETAILING AND ANCHORAGE -- AS 3600:2018 Section 13
+#
+# Anchorage is where a strength calculation meets the drawing. A beam whose
+# section capacity is ample fails anyway if the bars cannot develop that
+# capacity where it is needed, and unlike a capacity shortfall this failure
+# mode is invisible in the flexure output. That is the reason this section
+# exists in a package that already computes M_uo.
+# ---------------------------------------------------------------------------
+
+CLAUSE_DEVELOPMENT = ClauseRef(STANDARD, "13.1.2.2", note="Basic development length in tension")
+CLAUSE_DEVELOPMENT_REFINED = ClauseRef(STANDARD, "13.1.2.3", note="Refined development length")
+CLAUSE_DEVELOPMENT_COMP = ClauseRef(STANDARD, "13.1.5", note="Development length in compression")
+CLAUSE_LAP_TENSION = ClauseRef(STANDARD, "13.2.2", note="Lapped splices in tension")
+CLAUSE_LAP_COMPRESSION = ClauseRef(STANDARD, "13.2.4", note="Lapped splices in compression")
+CLAUSE_CURTAILMENT = ClauseRef(STANDARD, "8.1.10", note="Curtailment of flexural reinforcement")
+CLAUSE_BAR_SPACING = ClauseRef(STANDARD, "13.1.2.1", note="Minimum clear spacing of bars")
+
+# -- Basic tension development length, Cl 13.1.2.2 -------------------------
+#     L_sy.tb = 0.5 . k1 . k3 . f_sy . d_b / (k2 . sqrt(f'c))
+#            >= 0.058 . f_sy . k1 . d_b
+
+LSY_TB_COEFFICIENT = 0.5
+"""Leading coefficient in L_sy.tb. [VECTOR] UNVERIFIED."""
+
+LSY_TB_FLOOR_COEFFICIENT = 0.058
+"""Lower bound coefficient: L_sy.tb >= 0.058 f_sy k1 d_b.
+[VECTOR] UNVERIFIED."""
+
+K1_CAST_BELOW_300 = 1.3
+K1_DEFAULT = 1.0
+"""k1 = 1.3 for a horizontal bar with more than 300 mm of concrete cast below
+it, otherwise 1.0. The penalty accounts for bleed water collecting under the
+bar and weakening the bond. [VECTOR] UNVERIFIED -- both values and the 300 mm
+threshold below."""
+
+K1_DEPTH_THRESHOLD = 300.0
+"""Depth of concrete cast below a bar, in mm, above which k1 applies.
+[VECTOR] UNVERIFIED."""
+
+K2_NUMERATOR = 132.0
+K2_DIVISOR = 100.0
+"""k2 = (132 - d_b)/100. [VECTOR] UNVERIFIED."""
+
+K3_INTERCEPT = 1.0
+K3_SLOPE = 0.15
+K3_MIN = 0.7
+K3_MAX = 1.0
+"""k3 = 1.0 - 0.15 (c_d - d_b)/d_b, bounded to [0.7, 1.0]. c_d is a cover or
+half-spacing dimension depending on the bar arrangement.
+[VECTOR] UNVERIFIED -- coefficients and both bounds."""
+
+K4_NO_TRANSVERSE = 1.0
+K4_MIN = 0.7
+"""k4 = 1 - K.lambda, bounded below by 0.7, crediting transverse
+reinforcement crossing the splitting plane. Taken as 1.0 (no credit) unless
+the caller supplies a value. [VECTOR] UNVERIFIED."""
+
+K5_NO_PRESSURE = 1.0
+K5_MIN = 0.7
+"""k5 = 1 - 0.04 rho_p, bounded below by 0.7, crediting transverse compressive
+pressure. Taken as 1.0 (no credit) by default. [VECTOR] UNVERIFIED."""
+
+LSY_T_ABSOLUTE_MIN = 200.0
+"""Absolute minimum development length, mm. [VECTOR] UNVERIFIED."""
+
+# -- Compression development length, Cl 13.1.5 ------------------------------
+
+LSY_C_COEFFICIENT = 0.22
+LSY_C_FLOOR_COEFFICIENT = 0.0435
+LSY_C_ABSOLUTE_MIN = 200.0
+"""L_sy.c = 0.22 f_sy d_b / sqrt(f'c) >= 0.0435 f_sy d_b >= 200 mm.
+[VECTOR] UNVERIFIED -- all three."""
+
+# -- Laps, Cl 13.2 ----------------------------------------------------------
+
+K7_STAGGERED = 1.25
+K7_GENEROUS_STEEL = 1.0
+"""k7 on a tension lap: 1.25 in general, reducible to 1.0 where the area of
+steel provided is at least twice that required AND no more than half the bars
+are lapped at the section. [VECTOR] UNVERIFIED -- both values and both
+qualifying conditions."""
+
+LAP_TENSION_ABSOLUTE_MIN = 300.0
+"""Minimum tension lap, mm. [VECTOR] UNVERIFIED."""
+
+LAP_COMPRESSION_DB_FACTOR = 40.0
+LAP_COMPRESSION_ABSOLUTE_MIN = 300.0
+"""Compression lap >= max(40 d_b, L_sy.c, 300 mm).
+[VECTOR] UNVERIFIED -- the 40 and the 300."""
+
+# -- Curtailment, Cl 8.1.10 -------------------------------------------------
+
+CURTAIL_EXTENSION_D_FACTOR = 1.0
+CURTAIL_EXTENSION_DB_FACTOR = 12.0
+"""A bar must extend past the point at which it is no longer required for
+flexure by at least max(D, 12 d_b). The extension covers the shift in the
+tensile force caused by diagonal cracking.
+[VECTOR] UNVERIFIED -- both factors."""
+
+# -- Minimum clear spacing, Cl 13.1.2.1 -------------------------------------
+
+MIN_CLEAR_SPACING_ABSOLUTE = 25.0
+MIN_CLEAR_SPACING_AGGREGATE_FACTOR = 1.33
+"""Clear distance between parallel bars >= max(25 mm, d_b, 1.33 x maximum
+aggregate size). The aggregate rule is about getting concrete between the bars,
+not about bond. [VECTOR] UNVERIFIED -- the 25 mm and the 1.33."""

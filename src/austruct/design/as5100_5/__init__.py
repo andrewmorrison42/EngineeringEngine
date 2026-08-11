@@ -7,6 +7,12 @@ its shear model and capacity reduction factors are NOT those of AS 3600:2018.
 
 from . import constants
 from .flexure import check_flexure, moment_capacity
+from .serviceability import (
+    check_concrete_stress,
+    check_steel_stress,
+    effective_stiffness,
+    steel_stress_limit,
+)
 from .shear import (
     check_shear,
     concrete_shear_strength,
@@ -26,4 +32,9 @@ __all__ = [
     "required_shear_reinforcement",
     "concrete_shear_strength",
     "minimum_shear_reinforcement",
+    # serviceability
+    "effective_stiffness",
+    "check_steel_stress",
+    "check_concrete_stress",
+    "steel_stress_limit",
 ]

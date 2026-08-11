@@ -3,6 +3,7 @@
 Imports from: core, materials.
 """
 
+from .bar_layout import BarLayout, layer_layout, max_bars_in_width
 from .primitives import (
     Band,
     SectionGeometry,
@@ -40,4 +41,8 @@ __all__ = [
     "uncracked_properties",
     "cracked_properties",
     "cracking_moment",
+    # bar layout
+    "BarLayout",
+    "layer_layout",
+    "max_bars_in_width",
 ]

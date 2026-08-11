@@ -134,3 +134,61 @@ where V* = phi.V_u,max.
 
 ALPHA_V_VERTICAL = deg(90.0)
 """Fitment inclination for vertical ligatures."""
+
+
+# ---------------------------------------------------------------------------
+# SERVICEABILITY -- AS 5100.5:2017 Section 8.5 (deflection) and 8.6 (cracking)
+#
+# Bridges differ from buildings in two ways that matter here. The traffic load
+# is largely transient, so the sustained fraction driving creep is a smaller
+# part of the total than in a building. And exposure is usually more severe,
+# so crack control governs more often than deflection does.
+# ---------------------------------------------------------------------------
+
+CLAUSE_SLS_DEFLECTION = ClauseRef(STANDARD, "8.5.3", note="Effective second moment of area")
+CLAUSE_SLS_CRACKING = ClauseRef(STANDARD, "8.6.1", note="Crack control for flexure")
+CLAUSE_SLS_STRESS = ClauseRef(STANDARD, "8.6.2", note="Serviceability stress limits")
+
+IEF_EXPONENT = 3.0
+"""Exponent in the effective-second-moment interpolation.
+[BASIS] Cl 8.5.3. [VECTOR] UNVERIFIED."""
+
+IEF_MAX_P_THRESHOLD = 0.005
+IEF_MAX_FACTOR_HIGH_P = 1.0
+IEF_MAX_FACTOR_LOW_P = 0.6
+"""Cap on I_ef, reduced for lightly reinforced sections.
+[BASIS] Cl 8.5.3. [VECTOR] UNVERIFIED."""
+
+KCS_INTERCEPT = 2.0
+KCS_SLOPE = 1.2
+KCS_MIN = 0.8
+"""k_cs = 2 - 1.2 (A_sc/A_st) >= 0.8. [VECTOR] UNVERIFIED."""
+
+# -- Serviceability steel stress limits ------------------------------------
+# The governing crack-control mechanism in AS 5100.5 is a direct cap on the
+# steel stress increment, differentiated by exposure. These are the values a
+# bridge designer reaches for first.
+# [VECTOR] UNVERIFIED -- every value, and the exposure classifications they
+#          attach to. Confirm against Cl 8.6 before use.
+
+STEEL_STRESS_LIMIT_BY_EXPOSURE: dict[str, float] = {
+    "A1": 250.0,
+    "A2": 250.0,
+    "B1": 200.0,
+    "B2": 175.0,
+    "C1": 150.0,
+    "C2": 150.0,
+    "U": 150.0,
+}
+"""Maximum service-load tensile stress increment in the reinforcement (MPa),
+by AS 5100.5 exposure classification.
+[VECTOR] UNVERIFIED -- all seven values and the classification names."""
+
+CRACK_MAX_BAR_SPACING = 300.0
+"""Maximum centre-to-centre spacing of tensile bars, mm.
+[BASIS] Cl 8.6.1. [VECTOR] UNVERIFIED."""
+
+CONCRETE_COMPRESSIVE_STRESS_SLS = 0.4
+"""Cap on concrete compressive stress under service load, as a fraction of
+f'c. Guards against excessive creep and microcracking.
+[BASIS] Cl 8.6.2. [VECTOR] UNVERIFIED -- both the existence and the value."""
