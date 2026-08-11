@@ -67,6 +67,20 @@ PROVENANCE = REGISTRY.register(
 MERGE_TOLERANCE = 1e-4
 
 
+SegmentName = str
+"""A perimeter segment is identified by name.
+
+``Wall`` is a ``str`` enum, so the four sides of a box are valid segment names
+with no conversion. A crown culvert names its segments ``"left leg"``,
+``"crown"``, ``"right leg"`` and the same layout machinery serves both.
+"""
+
+
+def segment_label(segment: SegmentName) -> str:
+    """Human-readable name for a segment, whatever kind of name it is."""
+    return getattr(segment, "label", None) or str(segment)
+
+
 class Wall(str, Enum):
     """The four sides of a box structure.
 
@@ -114,7 +128,7 @@ class PinnedNode:
         rather than arbitrary.
     """
 
-    wall: Wall
+    wall: SegmentName
     fraction: float
     reason: str = ""
 
@@ -128,7 +142,7 @@ class PinnedNode:
 
     def __str__(self) -> str:
         tag = f"  ({self.reason})" if self.reason else ""
-        return f"{self.wall.label} at {self.fraction:.3f}{tag}"
+        return f"{segment_label(self.wall)} at {self.fraction:.3f}{tag}"
 
 
 @dataclass(frozen=True)
@@ -149,9 +163,12 @@ class PerimeterLayout:
         Divisions for any wall not named in ``divisions``.
     """
 
-    divisions: dict[Wall, int] = field(default_factory=dict)
+    divisions: dict[SegmentName, int] = field(default_factory=dict)
     pinned: tuple[PinnedNode, ...] = ()
     default_divisions: int = 8
+    segments: tuple[SegmentName, ...] = tuple(Wall)
+    """Which segments this layout covers, in order. Defaults to the four sides
+    of a box; a crown culvert passes its own three."""
 
     def __post_init__(self) -> None:
         if self.default_divisions < 1:
@@ -161,15 +178,15 @@ class PerimeterLayout:
         for wall, n in self.divisions.items():
             if n < 1:
                 raise ModelError(
-                    f"{wall.label} needs at least one division, got {n}"
+                    f"{segment_label(wall)} needs at least one division, got {n}"
                 )
 
     # -- interrogation --------------------------------------------------------
 
-    def divisions_for(self, wall: Wall) -> int:
+    def divisions_for(self, wall: SegmentName) -> int:
         return self.divisions.get(wall, self.default_divisions)
 
-    def fractions(self, wall: Wall) -> tuple[float, ...]:
+    def fractions(self, wall: SegmentName) -> tuple[float, ...]:
         """Every node position on ``wall``, as sorted fractions including ends.
 
         The uniform division points and the pinned nodes merged together, with
@@ -178,7 +195,9 @@ class PerimeterLayout:
         """
         n = self.divisions_for(wall)
         candidates = [i / n for i in range(n + 1)]
-        candidates.extend(p.fraction for p in self.pinned if p.wall is wall)
+        # == not `is`: a segment name is a plain string, and Wall members
+        # compare equal to their own values without being identical to them.
+        candidates.extend(p.fraction for p in self.pinned if p.wall == wall)
 
         merged: list[float] = []
         for value in sorted(candidates):
@@ -194,19 +213,28 @@ class PerimeterLayout:
             merged.append(1.0)
         return tuple(merged)
 
-    def reasons_for(self, wall: Wall) -> dict[float, str]:
-        """``{fraction: reason}`` for the pinned nodes on one wall."""
-        return {p.fraction: p.reason for p in self.pinned if p.wall is wall and p.reason}
+    def reasons_for(self, wall: SegmentName) -> dict[float, str]:
+        """``{fraction: reason}`` for the pinned nodes on one segment."""
+        return {p.fraction: p.reason for p in self.pinned if p.wall == wall and p.reason}
 
     @property
     def total_nodes(self) -> int:
-        """Node count around the closed perimeter, corners counted once."""
-        return sum(len(self.fractions(w)) - 1 for w in Wall)
+        """Node count around the perimeter, shared ends counted once."""
+        return sum(len(self.fractions(w)) - 1 for w in self.segments)
+
+    def for_segments(self, segments: tuple[SegmentName, ...]) -> PerimeterLayout:
+        """Copy covering a different set of segments.
+
+        Lets a layout written for one structure be reused on another -- the
+        node placements that name a segment the new structure does not have are
+        simply not consulted.
+        """
+        return replace(self, segments=segments)
 
     # -- directed adjustment --------------------------------------------------
 
     def with_node_at(
-        self, wall: Wall, fraction: float, reason: str = ""
+        self, wall: SegmentName, fraction: float, reason: str = ""
     ) -> PerimeterLayout:
         """Copy with one more node pinned at ``fraction`` along ``wall``.
 
@@ -219,7 +247,7 @@ class PerimeterLayout:
         return replace(self, pinned=self.pinned + (PinnedNode(wall, fraction, reason),))
 
     def with_node_at_distance(
-        self, wall: Wall, distance: float, wall_length: float, reason: str = ""
+        self, wall: SegmentName, distance: float, wall_length: float, reason: str = ""
     ) -> PerimeterLayout:
         """Copy with a node pinned ``distance`` mm from the start of ``wall``.
 
@@ -232,11 +260,11 @@ class PerimeterLayout:
         if not 0.0 <= distance <= wall_length:
             raise ModelError(
                 f"{distance} mm is outside the {wall_length:.0f} mm length of the "
-                f"{wall.label}."
+                f"{segment_label(wall)}."
             )
         return self.with_node_at(wall, distance / wall_length, reason)
 
-    def with_divisions(self, wall: Wall, n: int) -> PerimeterLayout:
+    def with_divisions(self, wall: SegmentName, n: int) -> PerimeterLayout:
         """Copy with a different baseline division count on one wall."""
         updated = dict(self.divisions)
         updated[wall] = n
@@ -254,11 +282,11 @@ class PerimeterLayout:
 
     def describe(self) -> list[str]:
         lines = [f"Perimeter layout: {self.total_nodes} nodes"]
-        for wall in Wall:
+        for wall in self.segments:
             fracs = self.fractions(wall)
             reasons = self.reasons_for(wall)
             lines.append(
-                f"  {wall.label:<11} {self.divisions_for(wall)} divisions, "
+                f"  {segment_label(wall):<11} {self.divisions_for(wall)} divisions, "
                 f"{len(fracs)} nodes"
             )
             for frac, reason in sorted(reasons.items()):
@@ -266,12 +294,12 @@ class PerimeterLayout:
         return lines
 
     def _repr_markdown_(self) -> str:
-        rows = ["| Wall | Divisions | Nodes | Directed |", "|---|---|---|---|"]
-        for wall in Wall:
+        rows = ["| Segment | Divisions | Nodes | Directed |", "|---|---|---|---|"]
+        for wall in self.segments:
             reasons = self.reasons_for(wall)
             note = ", ".join(f"{f:.3f} ({r})" for f, r in sorted(reasons.items())) or "-"
             rows.append(
-                f"| {wall.label} | {self.divisions_for(wall)} | "
+                f"| {segment_label(wall)} | {self.divisions_for(wall)} | "
                 f"{len(self.fractions(wall))} | {note} |"
             )
         return "**Perimeter layout**\n\n" + "\n".join(rows)

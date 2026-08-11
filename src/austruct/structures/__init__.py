@@ -16,7 +16,25 @@ from .box_culvert import (
     CulvertResults,
     inside_tension_sign,
 )
-from .perimeter import PerimeterLayout, PinnedNode, Wall, uniform
+from .crown_culvert import (
+    BaseFixity,
+    CrownCulvert,
+    CrownGeometry,
+    CrownLoading,
+    CrownResults,
+    Part,
+)
+from .perimeter import PerimeterLayout, PinnedNode, SegmentName, Wall, segment_label, uniform
+from .profile import (
+    Arc,
+    Constant,
+    Haunched,
+    Line,
+    Path,
+    Segment,
+    Tapered,
+    Thickness,
+)
 
 __all__ = [
     "Wall",
@@ -30,4 +48,22 @@ __all__ = [
     "inside_tension_sign",
     "DEFAULT_SUBGRADE_MODULUS",
     "DEFAULT_K0",
+    # crown (arch) culverts
+    "Part",
+    "BaseFixity",
+    "CrownGeometry",
+    "CrownLoading",
+    "CrownCulvert",
+    "CrownResults",
+    # perimeter geometry
+    "SegmentName",
+    "segment_label",
+    "Path",
+    "Line",
+    "Arc",
+    "Thickness",
+    "Constant",
+    "Tapered",
+    "Haunched",
+    "Segment",
 ]

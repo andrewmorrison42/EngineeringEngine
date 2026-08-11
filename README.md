@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 514 tests
+pytest                     # 560 tests
 ```
 
 Only runtime dependency is `numpy`. Plotting and reporting are extras:
@@ -173,7 +173,8 @@ L3   analysis              loads, beam model, solver, moving loads,      [ASET 3
                            influence lines, envelopes
 L3b  loads                 combinations, AS 5100.2 traffic, dispersal,
                            pattern loading                              [ASET 2]
-L3c  structures            box culvert as a closed frame                [ASET 3]
+L3c  structures            box culvert, crown (arch) culvert,           [ASET 3]
+                           perimeter profiles, directed node layout
 L4   design                rc_common/ + as3600/ + as5100_5/              [ASET 5]
 L5   report                the audit artifact                            [ASET 6]
 ```
@@ -331,6 +332,7 @@ python examples/03_as3600_vs_as5100.py     # the two standards side by side
 python examples/04_full_aset_workflow.py   # all six ASET components in one run
 python examples/05_buried_structure_and_moving_load.py   # moving loads + fill dispersal
 python examples/06_box_culvert_frame.py    # closed frame, directed nodes, HTML report
+python examples/07_crown_culvert.py        # arch action, thrust, unbalanced fill
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -647,6 +649,121 @@ it is there, so a reviewer can see the mesh was directed rather than arbitrary.
 `peak_moment()` adds the interior extrema itself, so it is right whether or not
 the mesh has been refined — refinement matters when you want the *nodal* output,
 a plot, or a schedule to land on the peak.
+
+
+---
+
+## Crown (arch) culverts
+
+A crown unit is not a box with a curved lid. A box carries load in **bending**;
+an arch carries it in **thrust**, and what is left over after the thrust has
+done its work is a much smaller moment. Same span, same cover, same 250 mm
+thickness:
+
+```
+box top slab peak M    =  17.81 kN.m
+arch crown  peak M     =   5.81 kN.m
+arch crown  max thrust =   60.3 kN
+```
+
+That is the reason for the shape — and the reason the footing has to be able to
+hold the thrust.
+
+```python
+culvert = CrownCulvert(
+    geometry=CrownGeometry(
+        span=4000, rise=1200, leg_height=1500,
+        crown_thickness=200, haunch_thickness=350, haunch_extent=0.18,
+        leg_thickness_base=300, leg_thickness_top=225,   # tapered legs
+    ),
+    loading=CrownLoading(fill_depth=600, k0=0.5),
+)
+r = culvert.solve()
+r.segment_thrust(Part.CROWN)     # compression positive
+r.springing_thrust()             # (horizontal, vertical) at the foot
+r.arch_efficiency                # M/(N.t) at the apex
+```
+
+**Tapered legs and haunches** are first-class: `profile.py` supplies `Line` and
+`Arc` paths and `Constant` / `Tapered` / `Haunched` thickness profiles, and each
+element takes the thickness at its own midpoint. A haunched crown really is
+stiffer at the springing in the model, not just in the drawing.
+
+**The fill depth varies across the crown** — deepest at the springings,
+shallowest at the apex — and the soil stress is resolved onto each element's own
+orientation, giving both a normal and a tangential traction. On a flat slab the
+tangential part vanishes; on an arch it feeds straight into the thrust.
+
+### Two things worth knowing before you design one
+
+**The springing thrust can point the wrong way.** An arch pushes its supports
+apart; backfill pushes the legs together. Which wins depends on the leg height
+and the earth pressure:
+
+```
+    k0    H at left foot   direction
+  0.001         12.0 kN     OUTWARD
+  0.200          0.4 kN     OUTWARD
+  0.500        -17.1 kN      inward
+  0.800        -34.6 kN      inward
+```
+
+With 1.5 m legs under 1.8 m of cover this unit's feet are pushed **inward**. A
+footing designed for outward thrust alone would be resisting the wrong
+direction.
+
+**The unbalanced case governs.** Symmetric lateral pressure largely cancels;
+asymmetric pressure does not, and an arch is far more sensitive to it than a box:
+
+```
+case                          left leg M   right leg M
+balanced                        -5.15         -5.15
+20 kPa surcharge one side       12.35        -24.36
+40 kPa surcharge one side       21.01        -43.57
+```
+
+A one-sided surcharge multiplies the leg moment eightfold. Backfilling one side
+ahead of the other is the same case, applied to a unit with no fill on top to
+hold it down — so construction sequence is a design condition, not a site
+matter. Use `surcharge_left` / `surcharge_right`.
+
+### Divisions matter more than node placement on a curve
+
+On a box the geometry is exact and only the sampling is coarse, so `refined()`
+fixes the answer outright. On a crown the geometry is a **chain of chords**, so
+the error is geometric and refinement converges rather than snapping to the
+peak. The crown's division count is therefore chosen from the **subtended
+angle**, not from a round number:
+
+```python
+geometry.recommended_crown_divisions()   # 25 for a 124-degree arc, ~5 deg/chord
+```
+
+This is applied by default, and it matters: eight divisions on this arc looks
+generous and is 12% wrong. Pass `divisions={Part.CROWN.value: n}` to override.
+
+Node directing works exactly as it does on a box, except distances along the
+crown are measured **along the arc** — which is what the unit is made to:
+
+```python
+culvert.with_node_at_distance(Part.CROWN, 1000, "lifting point")
+culvert.with_node_at(Part.CROWN, 0.5, "apex")
+```
+
+### What is not modelled
+
+- **Soil-structure interaction.** Free-field stresses only: no arching, no
+  relative-stiffness redistribution, no Marston or Spangler factor. A rigid
+  culvert under fill attracts *more* than the free field, so this is
+  **unconservative** unless you supply `vertical_arching_factor`.
+- **Combined bending and axial force.** The thrust is reported but
+  `check_flexure` takes no account of it. For a section below the balance point
+  the compression would increase the moment capacity, so ignoring it is
+  conservative for flexure — but the section has **not** been checked for
+  combined actions, which needs the N–M interaction this package does not have.
+- **Any manufacturer's product.** This is a parametric model of a crown unit,
+  not a model of a Humes unit. Span, rise, thicknesses and haunch dimensions
+  come from the catalogue and must be entered.
 
 ---
 
