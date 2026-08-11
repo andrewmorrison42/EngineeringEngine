@@ -50,10 +50,14 @@ from .moving import (
     moving_load_envelope,
     sweep_positions,
 )
+from .redistribution import Redistribution, redistribute, verify_equilibrium
 from .results import BeamResults, Reaction
 from .solver import solve
 
 __all__ = [
+    "Redistribution",
+    "redistribute",
+    "verify_equilibrium",
     # model
     "Beam",
     "Support",

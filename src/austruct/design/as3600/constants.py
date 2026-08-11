@@ -426,3 +426,34 @@ MIN_CLEAR_SPACING_AGGREGATE_FACTOR = 1.33
 """Clear distance between parallel bars >= max(25 mm, d_b, 1.33 x maximum
 aggregate size). The aggregate rule is about getting concrete between the bars,
 not about bond. [VECTOR] UNVERIFIED -- the 25 mm and the 1.33."""
+
+
+# ---------------------------------------------------------------------------
+# MOMENT REDISTRIBUTION -- AS 3600:2018 Cl 6.2.7
+#
+# How much moment a support can shed depends on how much rotation the plastic
+# hinge there can deliver before the concrete crushes -- which is a question
+# about the neutral axis depth. A lightly reinforced, shallow-axis section is
+# ductile and can redistribute; a heavily reinforced one cannot, and asking it
+# to would be asking for a brittle failure.
+# ---------------------------------------------------------------------------
+
+CLAUSE_REDISTRIBUTION = ClauseRef(STANDARD, "6.2.7", note="Moment redistribution")
+
+REDISTRIBUTION_KUO_FULL = 0.2
+"""k_uo at or below which the full redistribution percentage is available.
+[BASIS] Cl 6.2.7. [VECTOR] UNVERIFIED."""
+
+REDISTRIBUTION_KUO_NONE = 0.4
+"""k_uo at or above which NO redistribution is permitted.
+[BASIS] Cl 6.2.7. [VECTOR] UNVERIFIED."""
+
+REDISTRIBUTION_MAX_CLASS_N = 30.0
+"""Maximum redistribution for Class N reinforcement, per cent.
+[BASIS] Cl 6.2.7. [VECTOR] UNVERIFIED."""
+
+REDISTRIBUTION_MAX_CLASS_L = 0.0
+"""Maximum redistribution for Class L reinforcement, per cent. Class L is not
+ductile enough to form a reliable hinge, so no redistribution is permitted.
+[BASIS] Cl 6.2.7. [VECTOR] UNVERIFIED -- confirm this is a flat prohibition
+rather than a reduced allowance."""

@@ -29,6 +29,7 @@ from .serviceability import (
     check_span_to_depth,
     effective_stiffness,
     ief_max,
+    redistribution_limit,
 )
 from .shear import (
     check_shear,
@@ -57,6 +58,7 @@ __all__ = [
     "check_deflection",
     "check_crack_control",
     "check_span_to_depth",
+    "redistribution_limit",
     # detailing and anchorage
     "DevelopmentLength",
     "development_length",

@@ -35,15 +35,13 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from ..analysis.loading import (
+    UDL,
     AppliedMoment,
     Load,
     PartialUDL,
     PointLoad,
     SelfWeight,
     VaryingUDL,
-)
-from ..analysis.loading import (
-    UDL as UDLoad,
 )
 from ..core.exceptions import ModelError
 from ..core.provenance import ASETComponent, ModuleType, Provenance
@@ -56,7 +54,7 @@ PROVENANCE = REGISTRY.register(
         version="0.1.0",
         author="A. Morrison",
         module_type=ModuleType.B_PER_JOB,
-        component=ASETComponent.FAST_DEMAND,
+        component=ASETComponent.DEMAND,
     ),
     description="Pattern loading arrangements for continuous members",
     envelope_summary="Imposed actions patterned span by span; permanent actions never patterned",
@@ -68,11 +66,26 @@ PROVENANCE = REGISTRY.register(
 # ---------------------------------------------------------------------------
 
 
-def restrict_load(load: Load, start: float, end: float) -> Load | None:
+def restrict_load(
+    load: Load,
+    start: float,
+    end: float,
+    member_length: float | None = None,
+) -> Load | None:
     """The part of ``load`` lying within ``[start, end]``, or None.
 
     This is the operation pattern loading is built on: "apply the live load to
     span 2 only" means restricting each live load to that span's extent.
+
+    Parameters
+    ----------
+    load:
+        The load to restrict.
+    start, end:
+        The interval to keep (mm).
+    member_length:
+        Length of the member (mm). Required for a full-length ``UDL`` or
+        ``SelfWeight`` that has not yet been attached to a beam -- see below.
 
     Returns
     -------
@@ -84,12 +97,22 @@ def restrict_load(load: Load, start: float, end: float) -> Load | None:
     Raises
     ------
     ModelError
-        For a load type this function does not know how to restrict. Failing
-        loudly matters here: silently dropping an unrecognised load would
-        under-load the member, and nothing downstream would notice.
+        For a load type this function does not know how to restrict, or for a
+        full-length load whose extent cannot be determined.
 
     Notes
     -----
+    **Why ``member_length`` is needed.** ``UDL`` and ``SelfWeight`` carry their
+    own ``length``, but it is populated only when the load is attached to a
+    :class:`~austruct.analysis.beam.Beam`. A load case built standalone --
+    which is the normal way to build one -- therefore holds ``length = 0``.
+
+    Restricting such a load without knowing the member length silently
+    produces nothing, which drops the entire action and under-loads the member
+    with no error anywhere. That is exactly the failure this module's own
+    docstring warns about, and it is why an unresolvable length raises here
+    rather than returning ``None``.
+
     A concentrated load exactly on the boundary is INCLUDED. Two adjacent spans
     therefore both claim a load sitting precisely on the support between them.
     That is deliberate -- it is the conservative reading, and a point load at a
@@ -101,9 +124,17 @@ def restrict_load(load: Load, start: float, end: float) -> Load | None:
     if isinstance(load, PointLoad | AppliedMoment):
         return load if start <= load.position <= end else None
 
-    if isinstance(load, UDLoad | SelfWeight):
+    if isinstance(load, UDL | SelfWeight):
+        extent = load.length or member_length or 0.0
+        if extent <= 0:
+            raise ModelError(
+                f"Cannot restrict a {type(load).__name__} of unknown extent. Its "
+                "own length is zero, which is what a load case built outside a "
+                "Beam looks like, and no member_length was supplied. Returning "
+                "nothing here would silently delete the whole action."
+            )
         lo = max(start, 0.0)
-        hi = min(end, load.length)
+        hi = min(end, extent)
         if hi <= lo:
             return None
         return PartialUDL(
@@ -287,6 +318,7 @@ def apply_pattern(
     case: LoadCase,
     pattern: LoadPattern,
     spans: tuple[tuple[float, float], ...],
+    member_length: float | None = None,
 ) -> LoadCase:
     """Restrict a load case to the spans a pattern marks as loaded.
 
@@ -299,6 +331,11 @@ def apply_pattern(
         The arrangement.
     spans:
         Span extents from :func:`span_extents`.
+    member_length:
+        Member length (mm), needed to resolve the extent of a full-length UDL
+        that has not been attached to a beam. Defaults to the right-hand end of
+        the last span, which is correct unless the member cantilevers past its
+        outermost support.
 
     Returns
     -------
@@ -313,12 +350,14 @@ def apply_pattern(
             f"{len(spans)}. The pattern was built for a different member."
         )
 
+    length = member_length if member_length is not None else spans[-1][1]
+
     kept: list[Load] = []
     for loaded, (start, end) in zip(pattern.loaded, spans):
         if not loaded:
             continue
         for load in case.loads:
-            piece = restrict_load(load, start, end)
+            piece = restrict_load(load, start, end, member_length=length)
             if piece is not None:
                 kept.append(piece)
 
@@ -334,6 +373,7 @@ def patterned_case_sets(
     patterns: tuple[LoadPattern, ...],
     spans: tuple[tuple[float, float], ...],
     patterned_actions: frozenset[ActionType] = frozenset({ActionType.Q}),
+    member_length: float | None = None,
 ) -> tuple[tuple[str, tuple[LoadCase, ...]], ...]:
     """Build one full set of load cases per pattern.
 
@@ -370,10 +410,113 @@ def patterned_case_sets(
         built: list[LoadCase] = []
         for case in cases:
             if case.action in patterned_actions:
-                patterned = apply_pattern(case, pattern, spans)
+                patterned = apply_pattern(case, pattern, spans, member_length)
                 if patterned.loads:
                     built.append(patterned)
             else:
                 built.append(case)
         sets.append((pattern.name, tuple(built)))
     return tuple(sets)
+
+
+# ---------------------------------------------------------------------------
+# Running the patterns
+# ---------------------------------------------------------------------------
+
+
+def analyse_patterns(
+    beam,  # noqa: ANN001 -- austruct.analysis.beam.Beam, imported lazily below
+    cases: tuple[LoadCase, ...],
+    combinations,  # noqa: ANN001 -- tuple[LoadCombination, ...]
+    patterns: tuple[LoadPattern, ...] | None = None,
+    *,
+    patterned_actions: frozenset[ActionType] = frozenset({ActionType.Q}),
+    min_elements: int = 200,
+):
+    """Analyse every combination under every pattern and envelope the lot.
+
+    The governing label in the result becomes ``"ULS1 [alternate odd]"``, so a
+    reviewer reads off both which combination and which arrangement of imposed
+    load produced the design action at any point.
+
+    Parameters
+    ----------
+    beam:
+        The member. Its own loads are ignored; the cases supply the loading.
+    cases:
+        Unfactored load cases.
+    combinations:
+        Load combinations to apply.
+    patterns:
+        Arrangements to consider. Defaults to :func:`standard_patterns` for the
+        member's span count.
+    patterned_actions:
+        Which action types get rearranged. Permanent actions never do.
+    min_elements:
+        Mesh density.
+
+    Returns
+    -------
+    austruct.analysis.envelope.BeamEnvelope
+        Enveloped across combinations AND patterns together.
+
+    Notes
+    -----
+    The import of the analysis layer is deliberately deferred to call time.
+    ``analysis.envelope`` imports ``loads.combinations``, so a module-level
+    import here would close a cycle through this package's ``__init__``. The
+    layering is sound -- loads sits above analysis -- but the package-level
+    re-exports mean the cycle would bite at import time rather than at use.
+    """
+
+    from ..analysis.envelope import _union_mesh_points, envelope_from_results
+    from .combinations import filter_relevant
+
+    spans = span_extents(beam.support_positions)
+    if patterns is None:
+        patterns = standard_patterns(len(spans))
+
+    sets = patterned_case_sets(
+        cases, patterns, spans, patterned_actions, member_length=beam.length
+    )
+
+    # ONE grid for every pattern and every combination.
+    #
+    # This is why the work is done here rather than by calling
+    # analyse_combinations once per pattern. That function builds its shared
+    # mesh from the cases it is given, so each pattern would get a grid with
+    # nodes at ITS OWN load boundaries -- and different patterns have different
+    # boundaries. The envelopes could then not be compared position by
+    # position, which surfaces as "results have differing sample counts".
+    every_case = tuple(case for _, cases_in_set in sets for case in cases_in_set)
+    shared = _union_mesh_points(every_case, beam.length)
+
+    merged: dict[str, object] = {}
+    # Deduplicated by name rather than by identity: LoadCombination carries a
+    # dict of factors, so it is unhashable and cannot go into a set.
+    combos_used: dict[str, object] = {}
+
+    for pattern_name, pattern_cases in sets:
+        if not pattern_cases:
+            continue
+        relevant = filter_relevant(combinations, pattern_cases)
+        for combo in relevant:
+            trial = replace(
+                beam, loads=combo.apply(pattern_cases), extra_mesh_points=shared
+            )
+            merged[f"{combo.name} [{pattern_name}]"] = trial.solve(
+                min_elements=min_elements, refine_peaks=False
+            )
+            combos_used.setdefault(combo.name, combo)
+
+    if not merged:
+        raise ModelError(
+            "No pattern produced a loaded case. Check that the load cases' "
+            "action types match the patterned_actions set."
+        )
+
+    return envelope_from_results(
+        merged,  # type: ignore[arg-type]
+        beam,
+        combinations=tuple(combos_used.values()),  # type: ignore[arg-type]
+    )

@@ -24,6 +24,18 @@ from .dispersal import (
     FillDispersal,
     buried_structure_loads,
 )
+from .patterns import (
+    LoadPattern,
+    adjacent_pair,
+    all_spans_loaded,
+    alternate_spans,
+    analyse_patterns,
+    apply_pattern,
+    patterned_case_sets,
+    restrict_load,
+    span_extents,
+    standard_patterns,
+)
 
 __all__ = [
     "as5100_2",
@@ -35,6 +47,16 @@ __all__ = [
     "LimitState",
     "LoadCase",
     "LoadCombination",
+    "LoadPattern",
+    "standard_patterns",
+    "all_spans_loaded",
+    "alternate_spans",
+    "adjacent_pair",
+    "apply_pattern",
+    "patterned_case_sets",
+    "analyse_patterns",
+    "restrict_load",
+    "span_extents",
     "as1170_uls",
     "as1170_sls",
     "as5100_uls",

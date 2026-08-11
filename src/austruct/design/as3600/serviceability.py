@@ -56,6 +56,7 @@ from ...core.units import (
     U_STRESS,
     kNm,
 )
+from ...materials.reinforcement import Ductility
 from ...sections.bar_layout import layer_layout
 from ...sections.properties import cracked_properties, uncracked_properties
 from ...sections.rc_section import RCSection
@@ -610,3 +611,51 @@ def check_crack_control(
         "package does not implement."
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Moment redistribution limit -- AS 3600 Cl 6.2.7
+#
+# Placed in this module rather than in flexure.py because redistribution is a
+# question about how the member behaves as a whole, not about the strength of
+# one section.
+# ---------------------------------------------------------------------------
+
+
+def redistribution_limit(kuo: float, ductility: Ductility = Ductility.N) -> float:
+    """Maximum permitted moment redistribution, per cent.
+
+    Linear between the two ``k_uo`` bounds: the full allowance at or below
+    ``k_uo = 0.2``, tapering to zero at ``k_uo = 0.4``. A deeper neutral axis
+    means the concrete crushes sooner, so the hinge delivers less rotation
+    before it fails.
+
+    Parameters
+    ----------
+    kuo:
+        Neutral axis depth ratio at the section shedding moment -- the SUPPORT
+        section, not the span. This is the input most easily got wrong: the
+        allowance is set by the ductility of the hinge that forms, and the
+        hinge forms over the support.
+    ductility:
+        Reinforcement ductility class. Class L permits none.
+
+    Returns
+    -------
+    float
+        Maximum redistribution in per cent, between 0 and the class maximum.
+
+    [VECTOR] UNVERIFIED -- both bounds, the maximum, and the linear taper
+             between them.
+    """
+    if ductility is Ductility.L:
+        return C.REDISTRIBUTION_MAX_CLASS_L
+
+    maximum = C.REDISTRIBUTION_MAX_CLASS_N
+    if kuo <= C.REDISTRIBUTION_KUO_FULL:
+        return maximum
+    if kuo >= C.REDISTRIBUTION_KUO_NONE:
+        return 0.0
+
+    span = C.REDISTRIBUTION_KUO_NONE - C.REDISTRIBUTION_KUO_FULL
+    return maximum * (C.REDISTRIBUTION_KUO_NONE - kuo) / span
