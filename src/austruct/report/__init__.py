@@ -14,10 +14,27 @@ work and neither pays the matplotlib import until reached::
 from importlib import import_module
 from typing import Any
 
-from .renderers import MarkdownRenderer
-from .template import Renderer, Report, SignatureBlock
+from .renderers import HtmlRenderer, MarkdownRenderer
+from .template import (
+    Figure,
+    Narrative,
+    NarrativeKind,
+    Renderer,
+    Report,
+    SignatureBlock,
+)
 
-__all__ = ["Report", "SignatureBlock", "Renderer", "MarkdownRenderer", "plots"]
+__all__ = [
+    "Report",
+    "SignatureBlock",
+    "Narrative",
+    "NarrativeKind",
+    "Figure",
+    "Renderer",
+    "MarkdownRenderer",
+    "HtmlRenderer",
+    "plots",
+]
 
 
 def __getattr__(name: str) -> Any:

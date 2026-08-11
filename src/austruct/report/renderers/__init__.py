@@ -4,6 +4,7 @@ Adding a renderer (handcalcs, Jinja/HTML, Word merge) means implementing
 ``Renderer``; it does not mean changing the layout.
 """
 
+from .html import HtmlRenderer
 from .markdown import MarkdownRenderer
 
-__all__ = ["MarkdownRenderer"]
+__all__ = ["MarkdownRenderer", "HtmlRenderer"]

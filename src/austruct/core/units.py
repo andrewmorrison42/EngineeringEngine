@@ -79,6 +79,23 @@ kN = 1e3 * N
 MN = 1e6 * N
 
 # ---------------------------------------------------------------------------
+# [UNITS] Physical constants
+# ---------------------------------------------------------------------------
+GRAVITY = 9.81
+"""Acceleration due to gravity, m/s^2.
+
+Named because it appears in every self-weight conversion, and a bare 9.81 in
+the middle of a density calculation is the kind of number that gets quietly
+changed to 9.8 by one module and not another.
+
+[UNITS] m/s^2. The conversion from a density in kg/m^3 and an area in mm^2 to
+        an intensity in N/mm is ``rho * A * GRAVITY * 1e-9``.
+"""
+
+g = GRAVITY
+"""Short alias for :data:`GRAVITY`, for expressions that read as physics."""
+
+# ---------------------------------------------------------------------------
 # [UNITS] Stress and modulus
 # ---------------------------------------------------------------------------
 kPa = 1e-3 * MPa

@@ -192,3 +192,52 @@ CONCRETE_COMPRESSIVE_STRESS_SLS = 0.4
 """Cap on concrete compressive stress under service load, as a fraction of
 f'c. Guards against excessive creep and microcracking.
 [BASIS] Cl 8.6.2. [VECTOR] UNVERIFIED -- both the existence and the value."""
+
+
+# ---------------------------------------------------------------------------
+# FATIGUE -- AS 5100.5:2017 Section 12
+#
+# Fatigue is the failure mode a static check cannot see. A bridge girder that
+# is comfortably within capacity under the design vehicle can still crack a
+# bar after a few million axles, because what fatigue responds to is the
+# RANGE of stress, not its peak. A heavily loaded member with a small live
+# load fraction may be safe where a lightly loaded one with a large one is
+# not.
+#
+# This is also the check the moving-load machinery exists to feed: the stress
+# range at a section is the difference between the envelope maximum and
+# minimum there, which a sweep already produces.
+# ---------------------------------------------------------------------------
+
+CLAUSE_FATIGUE = ClauseRef(STANDARD, "12.1", note="Fatigue -- general")
+CLAUSE_FATIGUE_STEEL = ClauseRef(STANDARD, "12.3", note="Fatigue of reinforcement")
+CLAUSE_FATIGUE_CONCRETE = ClauseRef(STANDARD, "12.4", note="Fatigue of concrete")
+
+# -- Reinforcement stress range limits --------------------------------------
+# The detail, not the bar, governs. A straight bar tolerates far more than the
+# same bar at a weld or a bend, because the stress concentration there is what
+# initiates the crack.
+# [VECTOR] UNVERIFIED -- every value and every category name.
+
+FATIGUE_STRESS_RANGE_BY_DETAIL: dict[str, float] = {
+    "straight": 150.0,
+    "bent": 100.0,
+    "welded": 65.0,
+    "coupler": 65.0,
+}
+"""Limiting stress range in reinforcement (MPa), by detail category.
+[VECTOR] UNVERIFIED -- all four values and the category names."""
+
+FATIGUE_CYCLES_REFERENCE = 2.0e6
+"""Reference number of cycles the limiting stress ranges are quoted at.
+[VECTOR] UNVERIFIED."""
+
+FATIGUE_SN_EXPONENT = 5.0
+"""Exponent m in the S-N relationship (Delta_f)^m . N = constant, used to
+adjust the limiting range for a cycle count other than the reference.
+[VECTOR] UNVERIFIED -- the exponent, and whether AS 5100.5 permits this
+         adjustment at all rather than fixing a single endurance limit."""
+
+FATIGUE_CONCRETE_STRESS_LIMIT = 0.5
+"""Cap on concrete compressive stress under the fatigue load, as a fraction
+of f'c. [VECTOR] UNVERIFIED -- existence and value."""

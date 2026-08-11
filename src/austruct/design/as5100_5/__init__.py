@@ -6,6 +6,15 @@ its shear model and capacity reduction factors are NOT those of AS 3600:2018.
 """
 
 from . import constants
+from .fatigue import (
+    StressRange,
+    check_concrete_fatigue,
+    check_fatigue,
+    fatigue_from_envelope,
+    stress_range,
+    stress_range_limit,
+    worst_fatigue_position,
+)
 from .flexure import check_flexure, moment_capacity
 from .serviceability import (
     check_concrete_stress,
@@ -37,4 +46,12 @@ __all__ = [
     "check_steel_stress",
     "check_concrete_stress",
     "steel_stress_limit",
+    # fatigue
+    "StressRange",
+    "stress_range",
+    "stress_range_limit",
+    "check_fatigue",
+    "fatigue_from_envelope",
+    "worst_fatigue_position",
+    "check_concrete_fatigue",
 ]

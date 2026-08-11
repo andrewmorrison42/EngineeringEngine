@@ -83,10 +83,10 @@ to, so the register can report what is actually built:
 |---|---|---|---|
 | 1 | **Reference data** | `materials/` | Concrete grades, steel grades, bar catalogue. Held as JSON, queried in one call. |
 | 2 | **Project data** | `project/`, `loads/` | Job record → ψ factors → jurisdiction-specific combinations; AS 5100.2 traffic models; fill dispersal. |
-| 3 | **Fast demand calculation** | `analysis/` | Stiffness solver, moving-load sweeps, influence lines, then enveloping with the governing case recorded. |
+| 3 | **Fast demand calculation** | `analysis/`, `structures/` | Beam and plane-frame stiffness solvers, moving-load sweeps, influence lines, pattern loading and redistribution, then enveloping with the governing case recorded. |
 | 4 | **Design documentation** | `design_documentation/` | Plain-text designation grammar + CSV member schedules, round-tripping to sections. |
-| 5 | **Design verification** | `design/`, `sections/` | AS 3600 and AS 5100.5 flexure and shear. |
-| 6 | **Reporting** | `report/` | Fixed audit layout, interchangeable renderers. |
+| 5 | **Design verification** | `design/`, `sections/` | AS 3600 and AS 5100.5 flexure, shear, serviceability, detailing and fatigue. |
+| 6 | **Reporting** | `report/` | Fixed audit layout, interchangeable renderers, engineer narrative in place. |
 | — | Infrastructure | `core/` | The contract that lets 1–6 exchange data. |
 
 That last row is not one of the six, but component 5 asks for exactly it: *"an
@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 275 tests
+pytest                     # 514 tests
 ```
 
 Only runtime dependency is `numpy`. Plotting and reporting are extras:
@@ -171,7 +171,9 @@ L2   sections              geometry primitives, RC sections, properties
 L2b  design_documentation  designation grammar, member schedules         [ASET 4]
 L3   analysis              loads, beam model, solver, moving loads,      [ASET 3]
                            influence lines, envelopes
-L3b  loads                 combinations, AS 5100.2 traffic, dispersal    [ASET 2]
+L3b  loads                 combinations, AS 5100.2 traffic, dispersal,
+                           pattern loading                              [ASET 2]
+L3c  structures            box culvert as a closed frame                [ASET 3]
 L4   design                rc_common/ + as3600/ + as5100_5/              [ASET 5]
 L5   report                the audit artifact                            [ASET 6]
 ```
@@ -328,6 +330,7 @@ python examples/02_beam_design_report.py   # end-to-end design + audit report
 python examples/03_as3600_vs_as5100.py     # the two standards side by side
 python examples/04_full_aset_workflow.py   # all six ASET components in one run
 python examples/05_buried_structure_and_moving_load.py   # moving loads + fill dispersal
+python examples/06_box_culvert_frame.py    # closed frame, directed nodes, HTML report
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -488,6 +491,203 @@ depth 3000 mm:  centreline  47.1 kN | worst at  -135 mm ->  47.1 kN
 Shallow, the wheel lines govern; deep, the patches merge and the centre governs.
 Summed over adjacent strips the total returns the axle load exactly, which is
 the conservation check the tests assert.
+
+
+---
+
+## Serviceability, detailing and fatigue
+
+Strength design says a section works. Serviceability says the member is usable,
+and detailing says it can be built. A beam that passes flexure and shear alone
+has not been designed.
+
+```python
+state = as3600.effective_stiffness(section, M_s_max=180*kNm)   # I_ef, Branson
+as3600.check_deflection(section, span, delta_sustained, delta_transient, M_s_max)
+as3600.check_crack_control(section, M_s, cover=40, fitment_diameter=12)
+as5100_5.check_steel_stress(section, M_s, exposure="B2")       # bridges
+```
+
+Three distinctions the API refuses to collapse, because the code is built
+around them:
+
+- **The peak service moment is a separate argument from the sustained one.**
+  Cracking is irreversible, so the stiffness the sustained load acts on is the
+  one the *peak* left behind. Passing the sustained moment overestimates
+  stiffness and underestimates long-term deflection.
+- **Creep multiplies only the sustained part**, never the transient part.
+- **Steel stress past the end of a deemed-to-comply table is a failure, not an
+  extrapolation.** The route simply does not extend there.
+
+### Detailing — the check a capacity calculation cannot make
+
+```python
+as3600.development_length(20, fc=32, fsy=500, cover_to_bar=52, clear_spacing=40)
+as3600.lap_length(20, 32, 500, staggered=True, generous_steel=True)
+as3600.check_bar_fit(section, cover=40, aggregate_size=20)
+as3600.check_detailing(section, cover=40, available_anchorage=1200)
+```
+
+`M_uo` is perfectly happy with twelve N32 bars in a 300 mm web that could never
+be built. `check_bar_fit` is the only thing that isn't.
+
+`check_detailing` **reports** development lengths but **refuses to check** them
+unless you supply `available_anchorage`. The package sees a cross-section, not a
+member, so it cannot know how much bar runs past the point of maximum stress.
+
+### Fatigue
+
+Fatigue responds to the stress *range*, not the peak — so it is the one check
+that cannot come from a single static analysis, and it is the natural consumer
+of the moving-load sweep:
+
+```python
+env = moving_load_envelope(beam, model.train_with_dla(), step=250.0,
+                           static_loads=(UDL(magnitude=30*kN_per_m),))
+as5100_5.fatigue_from_envelope(section, env, detail="welded")
+as5100_5.worst_fatigue_position(section, env)
+```
+
+A consequence worth stating because it is counter-intuitive: **more dead load
+does not worsen fatigue.** It raises the stress but not the range, and the tests
+assert exactly that. The *detail* governs too, not the bar — a weld more than
+halves the permitted range.
+
+---
+
+## Continuous members: pattern loading and redistribution
+
+Loading every span of a continuous beam maximises nothing. On three equal spans,
+patterning finds 12% more sagging and 8% more hogging than the fully loaded
+case:
+
+```python
+env = analyse_patterns(beam, cases, as1170_uls())
+env.moment.max_combo[env.moment.peak_max_index]    # 'ULS2 [alternate odd]'
+```
+
+The governing label names both the combination and the arrangement, because
+patterns go through the same envelope core as the combinations and the moving
+load sweep.
+
+**Permanent actions are never patterned.** Self weight is present on every span
+whatever the imposed load is doing; patterning it would model a beam with
+sections of itself missing.
+
+```python
+r = redistribute(env, beam.support_positions, percentage=30.0)
+r.sagging_increase                 # what it cost
+as3600.redistribution_limit(kuo)   # what the code allows: 30% at kuo<=0.2, 0 at >=0.4
+```
+
+Redistribution rests on one fact: **adding a function that is linear within each
+span leaves equilibrium unchanged**, because a linear moment diagram carries no
+load. The correction is pinned to the chosen change at each support and
+interpolated across the spans, with the end supports pinned at zero so the
+reactions cannot move. Equilibrium holds by construction — `verify_equilibrium`
+demonstrates it rather than enforcing it.
+
+---
+
+## Box culverts: a closed frame, with the nodes where you want them
+
+A culvert top slab modelled as simply supported gets midspan roughly right and
+everything else wrong. The real structure is a closed box, so the walls restrain
+the slab and the corners carry hogging the simple model reports as **zero** —
+which is top steel it never asks for.
+
+```python
+culvert = BoxCulvert(
+    geometry=CulvertGeometry(clear_span=3000, clear_height=2400,
+                             top_thickness=300, base_thickness=350,
+                             wall_thickness=300),
+    loading=CulvertLoading(fill_depth=1000, k0=0.5),
+)
+results = culvert.solve()
+results.peak_moment(Wall.TOP)        # (fraction, moment)
+results.bearing_pressure()           # from the soil springs
+```
+
+The base slab sits on a bed of **springs**, not pins: a pinned base attracts
+corner moments no real soil could deliver, and the answer depends on exactly
+where the pins were put.
+
+Moments are reported with **tension on the inside face positive** for all four
+sides. The frame works in each member's local axes, and the two walls disagree
+about which way is "out" — so identical physical bending would otherwise read
+`+23.8` on one and `−23.8` on the other. The test that the convention is right
+is symmetry.
+
+### Directing the nodes
+
+A frame reports actions at nodes, so a peak *between* two nodes is never
+reported. Three ways to put one where you need it:
+
+```python
+layout = PerimeterLayout(default_divisions=8)          # 1. uniform baseline
+culvert.with_node_at_distance(Wall.TOP, 750, "construction joint")   # 2. by hand
+culvert.with_node_at(Wall.LEFT, 0.5, "mid-height check")
+refined = culvert.refined()                            # 3. onto the peaks
+```
+
+`refined()` solves, finds the zero-shear point **inside** every member by
+statics — exact, not sampled — and pins a node there:
+
+```
+mesh                    nodes   reported sagging    error
+3 divisions                12           13.09 kN.m   25.74%
+3 divisions, refined       16           17.25 kN.m    2.17%
+8 divisions                32           17.56 kN.m    0.40%
+200 divisions             800           17.63 kN.m    0.00%
+```
+
+Four extra nodes take the error from 26% to 2%. Every pinned node records *why*
+it is there, so a reviewer can see the mesh was directed rather than arbitrary.
+
+`peak_moment()` adds the interior extrema itself, so it is right whether or not
+the mesh has been refined — refinement matters when you want the *nodal* output,
+a plot, or a schedule to land on the peak.
+
+---
+
+## Reports someone else can read
+
+A report that reaches a road authority or an independent reviewer is read by a
+**person**, who needs the reasoning between the numbers. So the report body is
+one ordered list, and the engineer's prose sits where it was written:
+
+```python
+report.add_scope("Covers the top slab in flexure, crack control and deflection.")
+report.add_assumption("Founded on granular material, k_s = 30 MPa/m from the geotech report.")
+report.add(flexure)
+report.add_narrative("The corner hogging governs the top face, which a simply "
+                     "supported idealisation reports as zero.")
+report.add(crack_control)
+report.add_limitation("Every code constant is UNVERIFIED. Not for issue.")
+report.add_conclusion("The 300 mm slab with 5-N20 per metre is adequate.")
+
+Path("report.html").write_text(report.render(HtmlRenderer()))
+```
+
+This is the notebook workflow: write the calculation in a cell, write what it
+means in the next, and the document keeps both in order. Keeping prose in a
+separate list forces it to the end, where nobody reads it and where it no longer
+explains anything.
+
+The **HTML renderer** emits one self-contained file — inline styling, no
+JavaScript, no external requests of any kind, so nothing is stripped by a
+corporate firewall and it opens identically anywhere. It carries a print
+stylesheet that avoids splitting a check table across pages, and an unverified
+report is banded on **every printed page**, so a page photocopied out of context
+still carries the warning.
+
+Engineer narrative is styled distinctly from generated content, because a
+reviewer needs to tell a statement by the engineer from an output of the
+package — that distinction is where responsibility sits.
+
+```python
+report.has_narrative(NarrativeKind.ASSUMPTION)   # check before issue, not after
+```
 
 ---
 

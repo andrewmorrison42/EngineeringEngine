@@ -12,7 +12,7 @@ to PDF or Word without this package taking a dependency on either.
 from __future__ import annotations
 
 from ...core.contract import CalcResult, Value
-from ..template import Renderer, Report
+from ..template import Figure, Narrative, NarrativeKind, Renderer, Report
 
 
 class MarkdownRenderer(Renderer):
@@ -143,6 +143,28 @@ class MarkdownRenderer(Renderer):
         lines.extend(["```", "", "</details>", ""])
         return "\n".join(lines)
 
+    def narrative(self, block: Narrative) -> str:
+        """Engineer-written prose, set apart from the generated content.
+
+        Scope, assumptions and limitations are blockquoted so a reviewer can
+        see at a glance which parts of the document are a statement by the
+        engineer and which are output from the package. Commentary is left as
+        plain prose because it is meant to read continuously with what
+        surrounds it.
+        """
+        lines: list[str] = []
+        if block.heading:
+            lines.extend([f"### {block.heading}", ""])
+        if block.kind is NarrativeKind.COMMENTARY:
+            lines.extend([block.text, ""])
+        else:
+            label = block.kind.value.upper()
+            lines.append(f"> **{label}**")
+            lines.append(">")
+            lines.extend(f"> {line}" for line in block.text.splitlines())
+            lines.append("")
+        return "\n".join(lines)
+
     def figures(self, report: Report) -> str:
         """Section 5 -- embedded plots and geometry."""
         if not report.figures:
@@ -173,16 +195,30 @@ class MarkdownRenderer(Renderer):
     # -- driver ---------------------------------------------------------------
 
     def render(self, report: Report) -> str:
-        """Walk the fixed section order and emit the document."""
+        """Walk the report body in order and emit the document.
+
+        The body order is the ENGINEER'S order, not a fixed calculations-then-
+        prose split: narrative sits where it was written, between the
+        calculations it explains. Within each calculation the fixed section
+        order still applies, which is what keeps the artifact compliant.
+        """
         parts = [self.header(report)]
+        if report.preamble:
+            parts.extend([report.preamble, ""])
 
-        for i, result in enumerate(report.results, start=1):
-            parts.append(f"## {i}. {result.name}")
-            parts.append("")
-            parts.extend(p for p in self.result_sections(result) if p)
-            parts.append(self.provenance(result))
+        number = 0
+        for item in report.items:
+            if isinstance(item, Narrative):
+                parts.append(self.narrative(item))
+            elif isinstance(item, Figure):
+                parts.extend([f"![{item.caption}]({item.path})", "", f"*{item.caption}*", ""])
+            else:
+                number += 1
+                parts.append(f"## {number}. {item.name}")
+                parts.append("")
+                parts.extend(p for p in self.result_sections(item) if p)
+                parts.append(self.provenance(item))
 
-        parts.append(self.figures(report))
         parts.append(self.signature(report))
 
         return "\n".join(p for p in parts if p is not None).rstrip() + "\n"
