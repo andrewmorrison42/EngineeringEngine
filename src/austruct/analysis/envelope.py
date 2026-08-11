@@ -145,6 +145,22 @@ class ActionEnvelope:
         """Largest magnitude at a position, unsigned."""
         return max(abs(self.max_at(position)), abs(self.min_at(position)))
 
+    def to_table(self) -> dict[str, list]:
+        """The envelope as plain lists, for a DataFrame.
+
+        Includes the governing case at every position, not just at the peak --
+        which is what lets you see WHERE each combination takes over along the
+        member, rather than only which one wins overall.
+        """
+        f = self.display_factor
+        return {
+            "x_m": (self.x / 1000.0).tolist(),
+            "max": (self.max_values / f).tolist(),
+            "max_case": list(self.max_combo),
+            "min": (self.min_values / f).tolist(),
+            "min_case": list(self.min_combo),
+        }
+
     def to_dict(self) -> dict:
         """Ferster's ``factored_forces.json`` shape, with positions added."""
         f = self.display_factor
@@ -321,6 +337,10 @@ class BeamEnvelope:
                 "reactions": {r.label: r.to_dict() for r in self.reactions},
             }
         }
+
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook."""
+        return f"```\n{self.summary()}\n```"
 
     def to_calc_result(self) -> CalcResult:
         """Express the envelope through the standard contract."""

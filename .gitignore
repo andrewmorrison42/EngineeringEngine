@@ -11,3 +11,7 @@ venv/
 htmlcov/
 .DS_Store
 *.swp
+# Figures written by the examples and the quickstart notebook
+notebooks/*.png
+**/.ipynb_checkpoints/
+b1_diagrams.png

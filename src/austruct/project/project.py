@@ -330,3 +330,8 @@ class Project:
             f"Engineer    {self.engineer or 'not stated'}",
             f"Checker     {self.checker or 'NOT CHECKED'}",
         ]
+
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook."""
+        lines = "\n".join(self.describe())
+        return f"```\n{lines}\n```"

@@ -479,3 +479,16 @@ def rc_tee(
         bw_override=bw,
         name=name or f"T-beam {bf:.0f}/{bw:.0f} x {D:.0f}",
     )
+
+
+def _rc_section_repr_markdown(self: RCSection) -> str:
+    """Rich display in a Jupyter notebook.
+
+    Attached after the class definition rather than inside it so the dataclass
+    body stays about the section, not about how it is displayed.
+    """
+    lines = "\n".join(self.describe())
+    return f"```\n{lines}\n```"
+
+
+RCSection._repr_markdown_ = _rc_section_repr_markdown  # type: ignore[attr-defined]

@@ -110,6 +110,10 @@ class MovingLoadResult:
             lines.append(f"  NOTE: {note}")
         return "\n".join(lines)
 
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook."""
+        return f"```\n{self.summary()}\n```"
+
 
 _READ_EPS = 1e-6
 """Offset (mm) at which a diagram is read just to one side of a discontinuity.
@@ -341,6 +345,26 @@ class InfluenceLine:
 
     def at(self, position: float) -> float:
         return float(np.interp(position, self.x, self.values))
+
+    def to_table(self) -> dict[str, list[float]]:
+        """The line as plain lists, for a DataFrame.
+
+        [UNITS] x in m; values are per unit load, so their unit depends on the
+                response -- mm for a moment line, dimensionless for shear and
+                reaction.
+        """
+        return {"x_m": (self.x / 1000.0).tolist(), "value": self.values.tolist()}
+
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook."""
+        return (
+            f"```\n"
+            f"Influence line: {self.response} at x = {self.location / 1000:.3f} m\n"
+            f"  peak      {self.peak:.4g} at x = {self.peak_position / 1000:.3f} m\n"
+            f"  area      {self.area:.4g}\n"
+            f"  samples   {len(self.x)}\n"
+            f"```"
+        )
 
     def effect_of(self, loads: tuple[tuple[float, float], ...]) -> float:
         """Total effect of ``((position, magnitude), ...)`` point loads.

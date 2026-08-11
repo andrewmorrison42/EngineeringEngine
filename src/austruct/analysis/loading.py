@@ -616,3 +616,12 @@ class LoadTrain:
         if self.trailing_udl:
             lines.append(f"Trailing   = {self.trailing_udl * 1000 / 1e3:.2f} kN/m")
         return lines
+
+
+def _load_train_repr_markdown(self: LoadTrain) -> str:
+    """Rich display in a Jupyter notebook."""
+    lines = "\n".join(self.describe())
+    return f"```\n{lines}\n```"
+
+
+LoadTrain._repr_markdown_ = _load_train_repr_markdown  # type: ignore[attr-defined]

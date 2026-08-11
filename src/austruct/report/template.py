@@ -107,6 +107,16 @@ class Report:
     def render(self, renderer: Renderer) -> str:
         return renderer.render(self)
 
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook -- the whole report, rendered.
+
+        Means a notebook cell containing just the report object shows the
+        document, which is the thing the user is building.
+        """
+        from .renderers.markdown import MarkdownRenderer
+
+        return self.render(MarkdownRenderer())
+
 
 class Renderer(ABC):
     """Base class for report renderers.

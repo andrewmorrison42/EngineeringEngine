@@ -241,6 +241,26 @@ class BeamResults:
             lines.extend(f"  NOTE: {m}" for m in self.messages)
         return "\n".join(lines)
 
+    def to_table(self) -> dict[str, list[float]]:
+        """Diagrams as plain lists in DISPLAY units, for a DataFrame.
+
+        ``pandas.DataFrame(results.to_table())`` works without this package
+        depending on pandas. Display units because a notebook table of moments
+        in N.mm is unreadable.
+
+        [UNITS] x in m, shear in kN, moment in kN.m, deflection in mm.
+        """
+        return {
+            "x_m": (self.x / 1000.0).tolist(),
+            "shear_kN": (self.shear / kN).tolist(),
+            "moment_kNm": (self.moment / kNm).tolist(),
+            "deflection_mm": self.deflection.tolist(),
+        }
+
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook."""
+        return f"```\n{self.summary()}\n```"
+
     def to_calc_result(self) -> CalcResult:
         """Express the analysis as a standard contract result.
 

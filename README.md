@@ -96,10 +96,61 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 256 tests
+pytest                     # 275 tests
 ```
 
-Only runtime dependency is `numpy`.
+Only runtime dependency is `numpy`. Plotting and reporting are extras:
+
+```bash
+pip install -e ".[dev,plots]"
+```
+
+### Using it from Jupyter
+
+Install the package **into the environment your kernel runs in** — that is the
+one thing that catches people out:
+
+```bash
+pip install -e "/path/to/engineeringengine[plots]"   # from your notebook env
+python -m ipykernel install --user --name austruct   # optional: a named kernel
+```
+
+Then `import austruct` works from any directory. Start with
+[`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb), which walks a beam
+from project record to signed report.
+
+The headline objects render properly in a notebook rather than dumping their
+dataclass repr — evaluating a `CalcResult` shows the calculation, and a `Report`
+shows the document:
+
+```python
+section                       # section properties, materials, reinforcement
+as3600.check_flexure(...)     # inputs, basis, envelope, working, checks
+env                           # governing actions and which case caused each
+report                        # the whole audit document
+```
+
+Diagrams convert straight to a DataFrame, without the package depending on
+pandas:
+
+```python
+import pandas as pd
+pd.DataFrame(results.to_table())        # x_m, shear_kN, moment_kNm, deflection_mm
+pd.DataFrame(env.moment.to_table())     # plus the governing case at every position
+```
+
+And plots, with matplotlib as an optional extra:
+
+```python
+from austruct.report import plots
+plots.plot_diagrams(results)      # shear, moment, deflection — sagging drawn down
+plots.plot_envelope(env, show_cases=True)
+plots.plot_influence_line(il)
+plots.plot_section(section)       # outline with the bars to scale
+```
+
+`austruct.report` imports without matplotlib; only reaching `plots` pulls it in,
+and its absence gives an install instruction rather than a traceback.
 
 ---
 
@@ -418,7 +469,7 @@ without a named checker raises.
 
 ## What is verified, and what is not
 
-**Verified by test (256 passing):**
+**Verified by test (275 passing):**
 
 - Stiffness solver against closed-form solutions for simply supported,
   cantilever, propped cantilever, encastre and continuous beams — reactions,

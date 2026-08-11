@@ -339,3 +339,30 @@ class CalcResult:
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"
         return f"<CalcResult {self.name!r} {status} util={self.utilisation:.3f}>"
+
+    def _repr_markdown_(self) -> str:
+        """Rich display in a Jupyter notebook.
+
+        Without this, evaluating a result in a cell prints the nested dataclass
+        repr -- several hundred characters of Provenance and Value objects that
+        nobody can read. A notebook user types the object name and expects the
+        calculation, so this renders the standard report sections for it.
+
+        The import of the report layer is deliberately LAZY and deliberately
+        bends the import-downward rule, which core otherwise obeys absolutely.
+        The justification: this is a display concern, not a calculation one; it
+        runs only when a notebook asks for it; and the alternative is a second
+        copy of the table formatting in this module, which would drift from the
+        renderer it is meant to mirror.
+        """
+        from ..report.renderers.markdown import MarkdownRenderer
+
+        renderer = MarkdownRenderer()
+        status = "PASS" if self.passed else "**FAIL**"
+        parts = [f"**{self.name}** &nbsp; — &nbsp; {status}"]
+        if not self.provenance.issuable:
+            parts.append(
+                "> Module not verified for issue. Development use only."
+            )
+        parts.extend(p for p in renderer.result_sections(self) if p)
+        return "\n\n".join(parts)

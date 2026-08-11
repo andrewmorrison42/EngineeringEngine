@@ -82,3 +82,11 @@ ignore = [
     "N818",  # OutsideEnvelope / UnverifiedConstant read better without "Error"
     "B905",  # zip() strict= -- several zips deliberately pair unequal sequences
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebooks import where the reader needs the import, not all at the top. That
+# is the point of a teaching notebook -- `import pandas as pd` belongs in the
+# cell that first builds a DataFrame, so the reader sees why it is there.
+# Unused imports (F401) are still flagged, because an import a notebook never
+# uses tells the reader something is needed when it is not.
+"notebooks/*.ipynb" = ["I001", "E402"]
