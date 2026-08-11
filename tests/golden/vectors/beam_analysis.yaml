@@ -1,0 +1,128 @@
+# Golden vectors -- beam analysis
+#
+# Roadmap Phase 3: "No module enters the catalog without golden vectors and a
+# named checker." Each case here names its source, its checker and the date.
+#
+# STATUS: every case below is UNVERIFIED. `checked_by` is deliberately left as
+# the placeholder PENDING so that the test suite reports the module as not
+# cleared for issue. Replace with a real name and date once an engineer has
+# confirmed the expected values against the cited source.
+#
+# Sources are the standard closed-form solutions implemented in
+# austruct.analysis.closed_form, which are themselves an independent
+# implementation -- the comparison is between the stiffness solver and hand
+# formulae, sharing no code.
+
+module: austruct.analysis.solver
+
+cases:
+  - id: SS-UDL-01
+    description: Simply supported beam, full UDL
+    source: "Standard closed-form solution: R=wL/2, M=wL^2/8, delta=5wL^4/384EI"
+    checked_by: PENDING
+    checked_on: 2026-01-01
+    tolerance: 1.0e-6
+    model:
+      type: simply_supported
+      length_m: 8.0
+      EI: 1.62e14
+    loads:
+      - type: UDL
+        magnitude_kN_per_m: 25.0
+    expect:
+      R_left_kN: 100.0
+      M_max_kNm: 200.0
+      deflection_max_mm: 8.230452674897119
+
+  - id: SS-PT-CENTRAL-01
+    description: Simply supported beam, central point load
+    source: "Standard closed-form solution: R=P/2, M=PL/4, delta=PL^3/48EI"
+    checked_by: PENDING
+    checked_on: 2026-01-01
+    tolerance: 1.0e-6
+    model:
+      type: simply_supported
+      length_m: 8.0
+      EI: 1.62e14
+    loads:
+      - type: PointLoad
+        position_m: 4.0
+        magnitude_kN: 100.0
+    expect:
+      R_left_kN: 50.0
+      M_max_kNm: 200.0
+      deflection_max_mm: 6.584362139917695
+
+  - id: CANT-UDL-01
+    description: Cantilever, full UDL, root at left
+    source: "Standard closed-form solution: M_root=-wL^2/2, delta_tip=wL^4/8EI"
+    checked_by: PENDING
+    checked_on: 2026-01-01
+    tolerance: 1.0e-6
+    model:
+      type: cantilever
+      length_m: 8.0
+      EI: 1.62e14
+    loads:
+      - type: UDL
+        magnitude_kN_per_m: 25.0
+    expect:
+      R_left_kN: 200.0
+      M_min_kNm: -800.0
+      deflection_max_mm: 79.01234567901234
+
+  - id: PROP-UDL-01
+    description: Propped cantilever, full UDL. Singly indeterminate.
+    source: "Standard closed-form: R_fixed=5wL/8, M_fixed=-wL^2/8, M_sag=9wL^2/128"
+    checked_by: PENDING
+    checked_on: 2026-01-01
+    tolerance: 1.0e-6
+    model:
+      type: propped_cantilever
+      length_m: 8.0
+      EI: 1.62e14
+    loads:
+      - type: UDL
+        magnitude_kN_per_m: 25.0
+    expect:
+      R_left_kN: 125.0
+      R_right_kN: 75.0
+      M_min_kNm: -200.0
+      M_max_kNm: 112.5
+
+  - id: FIXED-UDL-01
+    description: Encastre beam, full UDL. Doubly indeterminate.
+    source: "Standard closed-form: M_end=-wL^2/12, M_mid=wL^2/24, delta=wL^4/384EI"
+    checked_by: PENDING
+    checked_on: 2026-01-01
+    tolerance: 1.0e-6
+    model:
+      type: fixed_fixed
+      length_m: 8.0
+      EI: 1.62e14
+    loads:
+      - type: UDL
+        magnitude_kN_per_m: 25.0
+    expect:
+      R_left_kN: 100.0
+      M_min_kNm: -133.33333333333334
+      M_max_kNm: 66.66666666666667
+      deflection_max_mm: 1.6460905349794237
+
+  - id: CONT-2SPAN-UDL-01
+    description: Two equal spans, full UDL. Support moment = -wL^2/8.
+    source: "Standard continuous beam coefficients: M_support=-wL^2/8, R_centre=1.25wL"
+    checked_by: PENDING
+    checked_on: 2026-01-01
+    tolerance: 1.0e-6
+    model:
+      type: continuous
+      spans_m: [8.0, 8.0]
+      EI: 1.62e14
+    loads:
+      - type: UDL
+        magnitude_kN_per_m: 25.0
+    expect:
+      M_min_kNm: -200.0
+      R_centre_kN: 250.0
+      R_left_kN: 75.0

@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "austruct"
+version = "0.1.0"
+description = "Structural engineering toolkit for AS 3600, AS 5100.5 and AS 5100.2"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Andrew Morrison" }]
+
+# ---------------------------------------------------------------------------
+# Runtime dependencies are deliberately minimal.
+#
+# Rationale (roadmap Phase 4): the distribution path is a local wheelhouse on a
+# shared drive and, for factory users, a compiled .exe. Every dependency added
+# here is a dependency someone has to vendor into the wheelhouse and freeze into
+# the .exe. numpy is the only one that earns its place -- the stiffness solver
+# needs dense linear algebra.
+#
+# Explicitly NOT dependencies of the core package:
+#   matplotlib  -- plotting is an optional extra, not needed to get a number
+#   handcalcs   -- a renderer, not the report standard (roadmap Phase 2)
+#   pint / forallpeople -- units are a documented convention here, see core/units.py
+# ---------------------------------------------------------------------------
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.7"]
+report = ["jinja2>=3.1"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pyyaml>=6.0",
+    "ruff>=0.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+austruct = ["**/*.json", "**/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "golden: benchmark case verified against an external source (roadmap Phase 3)",
+    "unverified: exercises a constant not yet checked against the printed standard",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+
+# ---------------------------------------------------------------------------
+# Naming rules are disabled where they conflict with engineering notation.
+#
+# This is a deliberate, documented exception rather than laziness. Code that
+# implements a printed standard should READ like the printed standard: the
+# overall depth is D, the flexural rigidity is EI, the tensile steel area is
+# A_st, the capacity is M_uo. Renaming those to `d_overall`, `ei`, `ast` and
+# `muo` to satisfy PEP 8 would make every clause harder to check against the
+# book -- which is the one thing this package most needs to stay easy.
+#
+# The convention is: engineering symbols keep the case used in the standard;
+# everything else follows PEP 8 normally.
+# ---------------------------------------------------------------------------
+ignore = [
+    "E501",  # line length -- clause-reference comments are allowed to run long
+    "N802",  # method names: D(), I_gross(), Z_top(), C40()
+    "N803",  # argument names: D, Df, EI, M_star, Ast
+    "N806",  # local variables: K, F, Vuc, Muo, dv
+    "N812",  # `from . import constants as C` -- intentional and readable
+    "N816",  # module-level unit constants: mm, kN, kNm, MPa
+    "N818",  # OutsideEnvelope / UnverifiedConstant read better without "Error"
+    "B905",  # zip() strict= -- several zips deliberately pair unequal sequences
+]
