@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 658 tests
+pytest                     # 675 tests
 ```
 
 Only runtime dependency is `numpy`. Plotting and reporting are extras:
@@ -336,6 +336,7 @@ python examples/05_buried_structure_and_moving_load.py   # moving loads + fill d
 python examples/06_box_culvert_frame.py    # closed frame, directed nodes, HTML report
 python examples/07_crown_culvert.py        # arch action, thrust, unbalanced fill
 python examples/08_steel_beam.py           # AS 4100, buckling, restraint spacing
+python examples/09_section_cost_optimisation.py   # cheapest RC section for a given M*
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -924,6 +925,71 @@ flexural-torsional buckling, biaxial bending, tension members, and composite
 construction (a different standard). The torsion constant `J` is thin-walled and
 runs 10–30% low for a rolled section, which makes `M_o` and therefore `M_b`
 conservative.
+
+---
+
+## Minimum-cost RC section search
+
+Given a design moment, `as3600.minimum_cost_section` searches a grid of
+practical widths and depths and, at each size, asks the bar catalogue for the
+cheapest single-layer arrangement that clears `check_flexure` **in full** —
+strength, ductility and minimum strength together, not just `M* <= phi.Muo`.
+
+```python
+bounds = as3600.SearchBounds(
+    width=as3600.SizeRange(250, 500, 50),
+    depth=as3600.SizeRange(400, 900, 50),
+)
+rates = as3600.CostRates(concrete_per_m3=180.0, steel_per_tonne=2200.0)
+result = as3600.minimum_cost_section(300 * kNm, concrete(32), bounds, rates)
+
+result.governing.describe()
+# '250 x 650  3-N24       util 0.970  cost 52.69 (concrete 29.25 + steel 23.44)'
+```
+
+Every `SectionCost` in `result.candidates` carries the actual `check_flexure`
+result for that exact section — the same object a hand-picked section would
+produce, not a re-derived summary. `result.candidates` is sorted by cost, so
+the next-cheapest alternatives are visible alongside the winner rather than
+thrown away.
+
+### It is a genuine trade-off, not "add more steel" or "go deeper"
+
+Every candidate pays the same rate per unit mass, so the cheapest bar
+arrangement at a given size is also the least-area one — no separate
+cost-ranking of arrangements is needed. What is *not* free is the size
+itself: run the search at different relative steel prices and the winning
+shape changes.
+
+```
+   steel $/t       section      bars        cost
+        800       250x550     3-N28        36.4
+       2200       250x650     3-N24        52.7
+       8000       250x900     3-N20        99.7
+```
+
+Cheap steel buys a shallow section with more bars; expensive steel buys
+depth instead, because lever arm is free and steel mass is not. That is why
+the search runs over sizes and bar arrangements together, rather than fixing
+a depth and only choosing bars against it.
+
+### What it deliberately does not do
+
+- **No shear reinforcement.** Fitments are sized once a section is chosen —
+  run `as3600.check_shear` against the winning candidate.
+- **No formwork, wastage or labour cost.** `CostRates.other_cost_rate` is a
+  flat per-metre addition the engineer can supply; it does not model any of
+  these.
+- **No multi-layer or mixed-diameter arrangements.** A section that only
+  closes up in two layers will not appear as a candidate — widen the depth
+  range rather than expecting the search to find it.
+- **No grade search.** Concrete grade is fixed per call. Run the search again
+  at a different grade to compare; which grade to use is the engineer's
+  decision, not one this function makes on their behalf.
+- **An infeasible grid comes back empty, not relaxed.** `result.governing` is
+  `None` when no size in the grid can develop `M*` at all, or no catalogue bar
+  fits the width — that means widen the bounds, not that the moment cannot be
+  carried.
 
 ---
 

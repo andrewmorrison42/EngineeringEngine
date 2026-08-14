@@ -23,6 +23,14 @@ from .flexure import (
     moment_capacity,
     required_steel_area,
 )
+from .optimise import (
+    CostRates,
+    OptimisationResult,
+    SearchBounds,
+    SectionCost,
+    SizeRange,
+    minimum_cost_section,
+)
 from .serviceability import (
     check_crack_control,
     check_deflection,
@@ -46,6 +54,13 @@ __all__ = [
     "check_flexure",
     "required_steel_area",
     "minimum_steel_area",
+    # cost optimisation
+    "minimum_cost_section",
+    "SearchBounds",
+    "SizeRange",
+    "CostRates",
+    "SectionCost",
+    "OptimisationResult",
     # shear
     "shear_capacity",
     "check_shear",
