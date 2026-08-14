@@ -1,0 +1,131 @@
+{
+  "_comment": [
+    "Structural steel grades -- yield and tensile strength banded by thickness.",
+    "",
+    "This file is REFERENCE DATA (ASET component 1). It is deliberately held as",
+    "a data file rather than in Python so that it can be checked, corrected and",
+    "signed off by an engineer who does not read code.",
+    "",
+    "=====================================================================",
+    "WHY THICKNESS BANDS, AND WHY THEY MATTER",
+    "=====================================================================",
+    "The yield stress of hot-rolled steel falls as the section gets thicker,",
+    "because a thicker section cools more slowly and works less. So f_y is a",
+    "function of (grade, thickness), NOT of grade alone.",
+    "",
+    "The consequence catches people out: a Grade 300 universal beam has a",
+    "DIFFERENT yield stress in its flange than in its web, because they are",
+    "different thicknesses. Any capacity expression that takes one f_y for the",
+    "whole section is wrong, usually by 5-15% and always in a direction that",
+    "depends on which thickness happened to be used.",
+    "",
+    "AS 4100 handles this by using the flange f_y for flexure and the web f_y",
+    "for shear. This package therefore always asks for a thickness.",
+    "",
+    "VERIFICATION: set status to VERIFIED and fill in checked_by/checked_on only",
+    "after every band has been confirmed against the printed standard. Until",
+    "then every number below is UNVERIFIED and must not be relied on for issue.",
+    "",
+    "Confidence, worst first -- check in this order:",
+    "  Plate grades   the band boundaries for AS/NZS 3678 plate are recalled",
+    "                 and the number of bands may be wrong.",
+    "  Section grades AS/NZS 3679.1 hot-rolled sections. Three bands recalled",
+    "                 with reasonable confidence, but the boundaries (11 mm,",
+    "                 17 mm) must be confirmed.",
+    "",
+    "SCHEMA",
+    "  bands   [[max_thickness_mm, fy_MPa, fu_MPa], ...] ascending by thickness.",
+    "          The LAST band applies to everything above the previous boundary,",
+    "          and its max_thickness is the largest the grade is made in.",
+    "  product what the grade is supplied as -- affects which standard governs"
+  ],
+  "source": "AS/NZS 3679.1 (hot-rolled sections) and AS/NZS 3678 (plate)",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {
+    "thickness": "mm",
+    "fy": "MPa",
+    "fu": "MPa",
+    "E": "MPa",
+    "G": "MPa",
+    "density": "kg/m^3"
+  },
+
+  "elastic": {
+    "E": 200000,
+    "G": 80000,
+    "poisson": 0.25,
+    "density": 7850,
+    "_note": [
+      "AS 4100 Cl 1.4. Poisson's ratio of 0.25 is the value AS 4100 nominates,",
+      "which differs from the 0.3 used in much of the literature -- and G is",
+      "quoted directly rather than derived from E and nu, so the three are not",
+      "exactly consistent. Use the quoted G.",
+      "[VECTOR] UNVERIFIED -- all four."
+    ]
+  },
+
+  "grades": {
+    "300": {
+      "product": "hot-rolled section",
+      "standard": "AS/NZS 3679.1",
+      "description": "The standard grade for universal beams, columns and channels.",
+      "bands": [
+        [11, 320, 440],
+        [17, 300, 440],
+        [100, 280, 440]
+      ],
+      "confidence": "recalled"
+    },
+
+    "350": {
+      "product": "hot-rolled section",
+      "standard": "AS/NZS 3679.1",
+      "description": "Higher strength hot-rolled section, sometimes marked 350PLUS.",
+      "bands": [
+        [11, 360, 480],
+        [17, 340, 480],
+        [100, 330, 480]
+      ],
+      "confidence": "recalled -- LESS confident than grade 300"
+    },
+
+    "250": {
+      "product": "plate",
+      "standard": "AS/NZS 3678",
+      "description": "Standard structural plate.",
+      "bands": [
+        [8, 280, 410],
+        [12, 260, 410],
+        [50, 250, 410],
+        [80, 240, 410]
+      ],
+      "confidence": "recalled -- band boundaries uncertain"
+    },
+
+    "350P": {
+      "product": "plate",
+      "standard": "AS/NZS 3678",
+      "description": "Higher strength structural plate.",
+      "bands": [
+        [12, 360, 450],
+        [20, 350, 450],
+        [80, 340, 450]
+      ],
+      "confidence": "recalled -- band boundaries uncertain"
+    },
+
+    "400P": {
+      "product": "plate",
+      "standard": "AS/NZS 3678",
+      "description": "High strength structural plate.",
+      "bands": [
+        [12, 400, 480],
+        [20, 380, 480],
+        [80, 360, 480]
+      ],
+      "confidence": "PLACEHOLDER -- the author is not confident of these values"
+    }
+  }
+}

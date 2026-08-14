@@ -1,0 +1,346 @@
+{
+  "_comment": [
+    "Australian hot-rolled steel section catalogue.",
+    "",
+    "=====================================================================",
+    "THIS FILE CAN CHECK ITSELF, AND THAT IS THE POINT",
+    "=====================================================================",
+    "Every other reference file in this package holds values that can only be",
+    "confirmed against the printed source. This one is different: it holds BOTH",
+    "the dimensions AND the published properties of each section.",
+    "",
+    "Those two are not independent. The properties FOLLOW from the dimensions.",
+    "So computing A, Ix, Zx, Sx, Iy, ry from the dimensions and comparing them",
+    "against the published values is a real check -- a transcription error in",
+    "either one shows up as a disagreement, and it would take a remarkably",
+    "unlucky pair of errors to agree.",
+    "",
+    "Run it with:  austruct.sections.steel_catalogue.verify_catalogue()",
+    "",
+    "WHAT THE EXPECTED DISCREPANCY IS",
+    "A rolled section has root radii where the flanges meet the web. This",
+    "package models three rectangles and ignores them, so computed values are",
+    "systematically LOW:",
+    "",
+    "  A, Ix, Zx, Sx   about 1-3% low. The fillets add material near the web.",
+    "  Iy              under 1% low. The fillets sit close to the minor axis,",
+    "                  so they contribute almost nothing to Iy.",
+    "  J               10-30% low. Torsional stiffness is acutely sensitive to",
+    "                  material at the junction, which is exactly where the",
+    "                  fillets are. Do NOT use the computed J for design.",
+    "  Iw              under 1% low.",
+    "",
+    "That pattern is itself diagnostic. A section whose Ix is 6% out has a",
+    "transcription error; one whose J is 20% out is behaving normally.",
+    "",
+    "THE THREE-WAY AREA CHECK",
+    "There are three independent routes to the area: from the dimensions, from",
+    "the tabulated A, and from the tabulated mass divided by the density. Any",
+    "two agreeing identifies the third as the outlier -- which turns 'these",
+    "disagree' into 'the DIMENSIONS are wrong', and that is actionable.",
+    "",
+    "WHAT THE CHECK HAS ALREADY FOUND",
+    "Every UB and UC in this file is internally consistent. Three channels are",
+    "NOT: 100PFC, 125PFC and 200PFC have dimensions that disagree with their",
+    "own tabulated area and mass. They are left as recorded, flagged, rather",
+    "than adjusted to pass -- tuning the numbers until the check goes green",
+    "would produce a file that is self-consistent and wrong, which is worse",
+    "than one that is honestly broken.",
+    "",
+    "Channel I_w also runs 6-15% below the tabulated values across the range.",
+    "That is a thin-walled formula meeting recalled data and either could be",
+    "at fault; it is not localised the way the area check is.",
+    "",
+    "=====================================================================",
+    "VERIFICATION STATUS",
+    "=====================================================================",
+    "Every dimension and every property below is RECALLED, not transcribed",
+    "from a published table. Passing the cross-check means the dimensions and",
+    "the properties are MUTUALLY CONSISTENT. It does NOT mean either is right:",
+    "a whole section family misremembered consistently would pass.",
+    "",
+    "Before use: open the ASI or manufacturer tables and confirm the dimensions.",
+    "The cross-check then confirms the properties for free.",
+    "",
+    "SCHEMA",
+    "  designation  as written on a drawing, e.g. 310UB40.4",
+    "  type         UB, UC, PFC",
+    "  mass         kg/m",
+    "  d, bf        overall depth and flange width, mm",
+    "  tf, tw       flange and web thickness, mm",
+    "  r            root radius, mm -- recorded but NOT modelled",
+    "  published    the tabulated properties. null where not recalled; the",
+    "               cross-check skips nulls rather than inventing a comparison"
+  ],
+  "source": "AS/NZS 3679.1 hot-rolled sections; properties as published by ASI",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {
+    "d": "mm", "bf": "mm", "tf": "mm", "tw": "mm", "r": "mm",
+    "mass": "kg/m", "A": "mm^2", "I": "mm^4", "Z": "mm^3", "S": "mm^3",
+    "r_gyration": "mm", "J": "mm^4", "Iw": "mm^6"
+  },
+
+  "sections": [
+    {
+      "designation": "610UB125", "type": "UB", "mass": 125,
+      "d": 612, "bf": 229, "tf": 19.6, "tw": 11.9, "r": 14,
+      "published": {"A": 16000, "Ix": 9.86e8, "Zx": 3.22e6, "Sx": 3.68e6,
+                    "rx": 249, "Iy": 3.93e7, "ry": 49.6, "J": 1.56e6, "Iw": 3.45e12},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "530UB92.4", "type": "UB", "mass": 92.4,
+      "d": 533, "bf": 209, "tf": 15.6, "tw": 10.2, "r": 14,
+      "published": {"A": 11800, "Ix": 5.54e8, "Zx": 2.08e6, "Sx": 2.37e6,
+                    "rx": 217, "Iy": 2.38e7, "ry": 44.9, "J": 7.75e5, "Iw": 1.59e12},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "460UB74.6", "type": "UB", "mass": 74.6,
+      "d": 457, "bf": 190, "tf": 14.5, "tw": 9.1, "r": 11.4,
+      "published": {"A": 9520, "Ix": 3.35e8, "Zx": 1.46e6, "Sx": 1.66e6,
+                    "rx": 188, "Iy": 1.66e7, "ry": 41.8, "J": 5.30e5, "Iw": 8.15e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "410UB53.7", "type": "UB", "mass": 53.7,
+      "d": 403, "bf": 178, "tf": 10.9, "tw": 7.6, "r": 11.4,
+      "published": {"A": 6890, "Ix": 1.88e8, "Zx": 9.33e5, "Sx": 1.06e6,
+                    "rx": 165, "Iy": 1.03e7, "ry": 38.6, "J": 2.34e5, "Iw": 3.87e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "360UB50.7", "type": "UB", "mass": 50.7,
+      "d": 356, "bf": 171, "tf": 11.5, "tw": 7.3, "r": 11.4,
+      "published": {"A": 6470, "Ix": 1.42e8, "Zx": 7.98e5, "Sx": 8.97e5,
+                    "rx": 148, "Iy": 9.60e6, "ry": 38.5, "J": 2.41e5, "Iw": 2.84e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "360UB44.7", "type": "UB", "mass": 44.7,
+      "d": 352, "bf": 171, "tf": 9.7, "tw": 6.9, "r": 11.4,
+      "published": {"A": 5720, "Ix": 1.21e8, "Zx": 6.89e5, "Sx": 7.77e5,
+                    "rx": 146, "Iy": 8.10e6, "ry": 37.6, "J": 1.61e5, "Iw": 2.35e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "310UB46.2", "type": "UB", "mass": 46.2,
+      "d": 307, "bf": 166, "tf": 11.8, "tw": 6.7, "r": 11.4,
+      "published": {"A": 5930, "Ix": 1.00e8, "Zx": 6.54e5, "Sx": 7.31e5,
+                    "rx": 130, "Iy": 9.01e6, "ry": 39.0, "J": 2.33e5, "Iw": 1.97e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "310UB40.4", "type": "UB", "mass": 40.4,
+      "d": 304, "bf": 165, "tf": 10.2, "tw": 6.1, "r": 11.4,
+      "published": {"A": 5210, "Ix": 8.64e7, "Zx": 5.69e5, "Sx": 6.33e5,
+                    "rx": 129, "Iy": 7.65e6, "ry": 38.3, "J": 1.57e5, "Iw": 1.65e11},
+      "confidence": "recalled -- the most confident entry here"
+    },
+    {
+      "designation": "310UB32.0", "type": "UB", "mass": 32.0,
+      "d": 298, "bf": 149, "tf": 8.0, "tw": 5.5, "r": 13,
+      "published": {"A": 4080, "Ix": 6.31e7, "Zx": 4.24e5, "Sx": 4.75e5,
+                    "rx": 124, "Iy": 4.42e6, "ry": 32.9, "J": 8.60e4, "Iw": 9.20e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "250UB37.3", "type": "UB", "mass": 37.3,
+      "d": 256, "bf": 146, "tf": 10.9, "tw": 6.4, "r": 8.9,
+      "published": {"A": 4750, "Ix": 5.57e7, "Zx": 4.35e5, "Sx": 4.86e5,
+                    "rx": 108, "Iy": 5.66e6, "ry": 34.5, "J": 1.58e5, "Iw": 8.52e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "250UB25.7", "type": "UB", "mass": 25.7,
+      "d": 248, "bf": 124, "tf": 8.0, "tw": 5.0, "r": 12,
+      "published": {"A": 3270, "Ix": 3.55e7, "Zx": 2.86e5, "Sx": 3.19e5,
+                    "rx": 104, "Iy": 2.55e6, "ry": 27.9, "J": 6.70e4, "Iw": 3.68e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "200UB29.8", "type": "UB", "mass": 29.8,
+      "d": 207, "bf": 134, "tf": 9.6, "tw": 6.3, "r": 8.9,
+      "published": {"A": 3820, "Ix": 2.91e7, "Zx": 2.81e5, "Sx": 3.16e5,
+                    "rx": 87.3, "Iy": 3.86e6, "ry": 31.8, "J": 1.06e5, "Iw": 3.86e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "200UB25.4", "type": "UB", "mass": 25.4,
+      "d": 203, "bf": 133, "tf": 7.8, "tw": 5.8, "r": 8.9,
+      "published": {"A": 3230, "Ix": 2.36e7, "Zx": 2.32e5, "Sx": 2.60e5,
+                    "rx": 85.4, "Iy": 3.06e6, "ry": 30.8, "J": 6.20e4, "Iw": 2.97e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "180UB18.1", "type": "UB", "mass": 18.1,
+      "d": 175, "bf": 90, "tf": 8.0, "tw": 5.0, "r": 8.9,
+      "published": {"A": 2300, "Ix": 1.22e7, "Zx": 1.39e5, "Sx": 1.59e5,
+                    "rx": 72.6, "Iy": 9.60e5, "ry": 20.4, "J": 4.20e4, "Iw": 6.60e9},
+      "confidence": "recalled -- less confident"
+    },
+    {
+      "designation": "150UB14.0", "type": "UB", "mass": 14.0,
+      "d": 150, "bf": 75, "tf": 7.0, "tw": 5.0, "r": 8,
+      "published": {"A": 1780, "Ix": 6.66e6, "Zx": 8.88e4, "Sx": 1.02e5,
+                    "rx": 61.1, "Iy": 4.90e5, "ry": 16.6, "J": 2.60e4, "Iw": 2.53e9},
+      "confidence": "recalled -- less confident"
+    },
+
+    {
+      "designation": "310UC158", "type": "UC", "mass": 158,
+      "d": 327, "bf": 311, "tf": 25.0, "tw": 15.7, "r": 16.5,
+      "published": {"A": 20100, "Ix": 3.86e8, "Zx": 2.36e6, "Sx": 2.68e6,
+                    "rx": 139, "Iy": 1.25e8, "ry": 78.9, "J": 3.81e6, "Iw": 2.86e12},
+      "confidence": "recalled -- less confident"
+    },
+    {
+      "designation": "310UC137", "type": "UC", "mass": 137,
+      "d": 320, "bf": 309, "tf": 21.7, "tw": 13.8, "r": 16.5,
+      "published": {"A": 17500, "Ix": 3.29e8, "Zx": 2.05e6, "Sx": 2.30e6,
+                    "rx": 137, "Iy": 1.07e8, "ry": 78.2, "J": 2.52e6, "Iw": 2.39e12},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "310UC118", "type": "UC", "mass": 118,
+      "d": 315, "bf": 307, "tf": 18.7, "tw": 11.9, "r": 16.5,
+      "published": {"A": 15000, "Ix": 2.77e8, "Zx": 1.76e6, "Sx": 1.96e6,
+                    "rx": 136, "Iy": 9.02e7, "ry": 77.5, "J": 1.63e6, "Iw": 1.98e12},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "310UC96.8", "type": "UC", "mass": 96.8,
+      "d": 308, "bf": 305, "tf": 15.4, "tw": 9.9, "r": 16.5,
+      "published": {"A": 12400, "Ix": 2.22e8, "Zx": 1.44e6, "Sx": 1.60e6,
+                    "rx": 134, "Iy": 7.29e7, "ry": 76.7, "J": 9.24e5, "Iw": 1.56e12},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "250UC89.5", "type": "UC", "mass": 89.5,
+      "d": 260, "bf": 256, "tf": 17.3, "tw": 10.5, "r": 14,
+      "published": {"A": 11400, "Ix": 1.43e8, "Zx": 1.10e6, "Sx": 1.23e6,
+                    "rx": 112, "Iy": 4.84e7, "ry": 65.2, "J": 1.04e6, "Iw": 7.14e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "250UC72.9", "type": "UC", "mass": 72.9,
+      "d": 254, "bf": 254, "tf": 14.2, "tw": 8.6, "r": 14,
+      "published": {"A": 9320, "Ix": 1.14e8, "Zx": 8.97e5, "Sx": 9.92e5,
+                    "rx": 110, "Iy": 3.88e7, "ry": 64.5, "J": 5.79e5, "Iw": 5.60e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "200UC59.5", "type": "UC", "mass": 59.5,
+      "d": 210, "bf": 205, "tf": 14.2, "tw": 9.3, "r": 11.4,
+      "published": {"A": 7620, "Ix": 6.13e7, "Zx": 5.84e5, "Sx": 6.56e5,
+                    "rx": 89.7, "Iy": 2.04e7, "ry": 51.7, "J": 4.77e5, "Iw": 1.96e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "200UC46.2", "type": "UC", "mass": 46.2,
+      "d": 203, "bf": 203, "tf": 11.0, "tw": 7.3, "r": 11.4,
+      "published": {"A": 5900, "Ix": 4.59e7, "Zx": 4.51e5, "Sx": 4.97e5,
+                    "rx": 88.2, "Iy": 1.53e7, "ry": 51.0, "J": 2.28e5, "Iw": 1.42e11},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "150UC30.0", "type": "UC", "mass": 30.0,
+      "d": 158, "bf": 153, "tf": 9.4, "tw": 6.6, "r": 8.9,
+      "published": {"A": 3860, "Ix": 1.76e7, "Zx": 2.22e5, "Sx": 2.48e5,
+                    "rx": 67.5, "Iy": 5.62e6, "ry": 38.2, "J": 1.06e5, "Iw": 3.06e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "150UC23.4", "type": "UC", "mass": 23.4,
+      "d": 152, "bf": 152, "tf": 6.8, "tw": 6.1, "r": 8.9,
+      "published": {"A": 2980, "Ix": 1.26e7, "Zx": 1.66e5, "Sx": 1.84e5,
+                    "rx": 65.1, "Iy": 3.98e6, "ry": 36.6, "J": 4.75e4, "Iw": 2.10e10},
+      "confidence": "recalled"
+    },
+    {
+      "designation": "100UC14.8", "type": "UC", "mass": 14.8,
+      "d": 97, "bf": 99, "tf": 7.0, "tw": 5.0, "r": 10,
+      "published": {"A": 1890, "Ix": 3.18e6, "Zx": 6.56e4, "Sx": 7.39e4,
+                    "rx": 41.1, "Iy": 1.14e6, "ry": 24.5, "J": 3.42e4, "Iw": 2.42e9},
+      "confidence": "recalled -- less confident"
+    },
+
+    {
+      "designation": "380PFC", "type": "PFC", "mass": 55.2,
+      "d": 380, "bf": 100, "tf": 17.5, "tw": 10.0, "r": 14,
+      "published": {"A": 7030, "Ix": 1.52e8, "Zx": 8.00e5, "Sx": 9.60e5,
+                    "rx": 147, "Iy": 5.83e6, "ry": 28.8, "J": 5.55e5, "Iw": 1.44e11},
+      "confidence": "recalled -- PFC properties are the least reliable here"
+    },
+    {
+      "designation": "300PFC", "type": "PFC", "mass": 40.1,
+      "d": 300, "bf": 90, "tf": 16.0, "tw": 8.0, "r": 14,
+      "published": {"A": 5110, "Ix": 7.24e7, "Zx": 4.83e5, "Sx": 5.76e5,
+                    "rx": 119, "Iy": 4.04e6, "ry": 28.1, "J": 3.85e5, "Iw": 6.60e10},
+      "confidence": "recalled -- PFC properties are the least reliable here"
+    },
+    {
+      "designation": "250PFC", "type": "PFC", "mass": 35.5,
+      "d": 250, "bf": 90, "tf": 15.0, "tw": 8.0, "r": 12,
+      "published": {"A": 4520, "Ix": 4.55e7, "Zx": 3.64e5, "Sx": 4.32e5,
+                    "rx": 100, "Iy": 3.68e6, "ry": 28.5, "J": 3.05e5, "Iw": 3.85e10},
+      "confidence": "recalled -- PFC properties are the least reliable here"
+    },
+    {
+      "designation": "230PFC", "type": "PFC", "mass": 25.1,
+      "d": 230, "bf": 75, "tf": 12.2, "tw": 6.5, "r": 12,
+      "published": {"A": 3200, "Ix": 2.65e7, "Zx": 2.30e5, "Sx": 2.75e5,
+                    "rx": 91.0, "Iy": 1.76e6, "ry": 23.5, "J": 1.42e5, "Iw": 1.55e10},
+      "confidence": "recalled -- PFC properties are the least reliable here"
+    },
+    {
+      "designation": "200PFC", "type": "PFC", "mass": 22.9,
+      "d": 200, "bf": 75, "tf": 11.4, "tw": 6.0, "r": 12,
+      "published": {"A": 2920, "Ix": 1.86e7, "Zx": 1.86e5, "Sx": 2.21e5,
+                    "rx": 79.8, "Iy": 1.66e6, "ry": 23.9, "J": 1.13e5, "Iw": 1.03e10},
+      "confidence": "INCONSISTENT -- dimensions disagree with the tabulated area and mass",
+      "_note": [
+        "The cross-check finds A from the dimensions is 2773 mm^2 while the",
+        "tabulated area (2920) and the mass (2917) agree with each other.",
+        "Two independent sources against one: the recorded d/bf/tf/tw are too",
+        "THIN. Correct them from the published table -- do not adjust the",
+        "properties to match, which would make the file self-consistent and",
+        "wrong."
+      ]
+    },
+    {
+      "designation": "150PFC", "type": "PFC", "mass": 17.7,
+      "d": 150, "bf": 75, "tf": 9.5, "tw": 6.0, "r": 10,
+      "published": {"A": 2250, "Ix": 8.34e6, "Zx": 1.11e5, "Sx": 1.32e5,
+                    "rx": 60.9, "Iy": 1.29e6, "ry": 23.9, "J": 6.10e4, "Iw": 5.15e9},
+      "confidence": "recalled -- PFC properties are the least reliable here"
+    },
+    {
+      "designation": "125PFC", "type": "PFC", "mass": 11.9,
+      "d": 125, "bf": 65, "tf": 9.5, "tw": 5.5, "r": 8,
+      "published": {"A": 1520, "Ix": 4.09e6, "Zx": 6.54e4, "Sx": 7.80e4,
+                    "rx": 51.9, "Iy": 6.79e5, "ry": 21.1, "J": 4.10e4, "Iw": 1.85e9},
+      "confidence": "INCONSISTENT -- dimensions disagree with the tabulated area and mass",
+      "_note": [
+        "A from the dimensions is 1818 mm^2 against a tabulated 1520 and a",
+        "mass-implied 1516. The recorded flange and web thicknesses are too",
+        "THICK by roughly a fifth. Correct the dimensions from the published",
+        "table."
+      ]
+    },
+    {
+      "designation": "100PFC", "type": "PFC", "mass": 8.33,
+      "d": 100, "bf": 50, "tf": 8.5, "tw": 5.0, "r": 8,
+      "published": {"A": 1060, "Ix": 1.74e6, "Zx": 3.48e4, "Sx": 4.16e4,
+                    "rx": 40.5, "Iy": 2.53e5, "ry": 15.5, "J": 2.40e4, "Iw": 4.20e8},
+      "confidence": "INCONSISTENT -- dimensions disagree with the tabulated area and mass",
+      "_note": [
+        "A from the dimensions is 1265 mm^2 against a tabulated 1060 and a",
+        "mass-implied 1061. The recorded tf = 8.5 and tw = 5.0 are too THICK;",
+        "the tabulated area implies roughly tf = 6.5. Correct from the table."
+      ]
+    }
+  ]
+}

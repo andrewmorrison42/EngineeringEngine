@@ -34,8 +34,13 @@ from .reinforcement import (
     Reinforcement,
     reinforcement,
 )
+from .steel import SteelGrade, describe_grades, grade_names, steel
 
 __all__ = [
+    "steel",
+    "SteelGrade",
+    "grade_names",
+    "describe_grades",
     # concrete
     "Concrete",
     "concrete",

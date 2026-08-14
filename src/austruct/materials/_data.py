@@ -30,10 +30,22 @@ from typing import Any
 
 DATA_PACKAGE = "austruct.materials.data"
 
+DATA_PACKAGES: tuple[str, ...] = (
+    "austruct.materials.data",
+    "austruct.sections.data",
+)
+"""Every package that holds reference-data files.
+
+Section data lives with the sections and material data with the materials --
+they are looked up by the same loader but they are not the same kind of thing,
+and filing the steel catalogue under ``materials`` to save a lookup would put
+it where nobody would go looking for it.
+"""
+
 
 @cache
 def load(filename: str) -> dict[str, Any]:
-    """Load one reference-data file.
+    """Load one reference-data file, from whichever data package holds it.
 
     Cached, because these are static tables read many times per run and never
     written. Call :func:`reload` after editing a file in a live session.
@@ -41,24 +53,32 @@ def load(filename: str) -> dict[str, Any]:
     Parameters
     ----------
     filename:
-        e.g. ``"concrete_grades.json"``.
+        e.g. ``"concrete_grades.json"``. Filenames are unique across the data
+        packages, so the caller does not have to know which one holds it.
 
     Raises
     ------
     FileNotFoundError
-        If the file is not present in the data package -- which usually means
-        the package was installed without its data files. See the
-        ``package-data`` entry in ``pyproject.toml``.
+        If the file is in none of them -- which usually means the package was
+        installed without its data files. See the ``package-data`` entry in
+        ``pyproject.toml``.
     """
-    try:
-        text = resources.files(DATA_PACKAGE).joinpath(filename).read_text(encoding="utf-8")
-    except (FileNotFoundError, ModuleNotFoundError) as exc:
-        raise FileNotFoundError(
-            f"Reference data file {filename!r} not found in {DATA_PACKAGE}. "
-            "If austruct was installed as a wheel, check that package-data is "
-            "configured so the .json files ship with it."
-        ) from exc
-    return json.loads(text)
+    for package in DATA_PACKAGES:
+        try:
+            text = (
+                resources.files(package)
+                .joinpath(filename)
+                .read_text(encoding="utf-8")
+            )
+        except (FileNotFoundError, ModuleNotFoundError):
+            continue
+        return json.loads(text)
+
+    raise FileNotFoundError(
+        f"Reference data file {filename!r} not found in any of "
+        f"{', '.join(DATA_PACKAGES)}. If austruct was installed as a wheel, "
+        "check that package-data is configured so the .json files ship with it."
+    )
 
 
 def reload() -> None:
@@ -83,7 +103,13 @@ def verification_status(filename: str) -> tuple[str, str | None, str | None]:
 
 def all_data_files() -> tuple[str, ...]:
     """Every reference-data file shipped with the package."""
-    return ("concrete_grades.json", "reinforcement_grades.json", "bar_sizes.json")
+    return (
+        "concrete_grades.json",
+        "reinforcement_grades.json",
+        "bar_sizes.json",
+        "steel_grades.json",
+        "steel_sections.json",
+    )
 
 
 def data_verification_report() -> str:
