@@ -85,7 +85,7 @@ to, so the register can report what is actually built:
 | 2 | **Project data** | `project/`, `loads/` | Job record → ψ factors → jurisdiction-specific combinations; AS 5100.2 traffic models; fill dispersal. |
 | 3 | **Fast demand calculation** | `analysis/`, `structures/` | Beam and plane-frame stiffness solvers, moving-load sweeps, influence lines, pattern loading and redistribution, then enveloping with the governing case recorded. |
 | 4 | **Design documentation** | `design_documentation/` | Plain-text designation grammar + CSV member schedules, round-tripping to sections. |
-| 5 | **Design verification** | `design/`, `sections/` | AS 3600 and AS 5100.5 flexure, shear, serviceability, detailing and fatigue. |
+| 5 | **Design verification** | `design/`, `sections/` | AS 3600 and AS 5100.5 flexure, shear, serviceability, detailing and fatigue. AS 4100 steel: classification, section and member capacity, compression, combined actions. |
 | 6 | **Reporting** | `report/` | Fixed audit layout, interchangeable renderers, engineer narrative in place. |
 | — | Infrastructure | `core/` | The contract that lets 1–6 exchange data. |
 
@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 560 tests
+pytest                     # 658 tests
 ```
 
 Only runtime dependency is `numpy`. Plotting and reporting are extras:
@@ -165,9 +165,11 @@ rule is what keeps the toolkit composable.
 
 ```
 L0   core                  contract, basis, envelope, provenance, units, registry
-L1   materials             concrete, reinforcement, bar catalogue        [ASET 1]
+L1   materials             concrete, reinforcement, bar catalogue,       [ASET 1]
+                           steel grades banded by plate thickness
 L1b  project               job record, occupancy, exposure, ψ factors    [ASET 2]
-L2   sections              geometry primitives, RC sections, properties
+L2   sections              geometry primitives, RC sections, properties,
+                           steel plate assemblies, section catalogue
 L2b  design_documentation  designation grammar, member schedules         [ASET 4]
 L3   analysis              loads, beam model, solver, moving loads,      [ASET 3]
                            influence lines, envelopes
@@ -175,7 +177,7 @@ L3b  loads                 combinations, AS 5100.2 traffic, dispersal,
                            pattern loading                              [ASET 2]
 L3c  structures            box culvert, crown (arch) culvert,           [ASET 3]
                            perimeter profiles, directed node layout
-L4   design                rc_common/ + as3600/ + as5100_5/              [ASET 5]
+L4   design                rc_common/ + as3600/ + as5100_5/ + as4100/    [ASET 5]
 L5   report                the audit artifact                            [ASET 6]
 ```
 
@@ -333,6 +335,7 @@ python examples/04_full_aset_workflow.py   # all six ASET components in one run
 python examples/05_buried_structure_and_moving_load.py   # moving loads + fill dispersal
 python examples/06_box_culvert_frame.py    # closed frame, directed nodes, HTML report
 python examples/07_crown_culvert.py        # arch action, thrust, unbalanced fill
+python examples/08_steel_beam.py           # AS 4100, buckling, restraint spacing
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -764,6 +767,163 @@ culvert.with_node_at(Part.CROWN, 0.5, "apex")
 - **Any manufacturer's product.** This is a parametric model of a crown unit,
   not a model of a Humes unit. Span, rise, thicknesses and haunch dimensions
   come from the catalogue and must be entered.
+
+
+---
+
+## Steel to AS 4100
+
+### The catalogue checks itself
+
+Every other reference file here can only be confirmed against the printed
+source. The steel catalogue is different: it holds the **dimensions** and the
+**published properties**, and the second follows from the first. So they can be
+compared.
+
+```python
+from austruct.sections import steel_catalogue as cat
+print(cat.verify_catalogue().report())
+```
+
+```
+prop       mean     tol   expected cause
+A        -0.76%      5%   fillet material at the web
+Ix       -1.16%      5%   as A, close to the neutral axis
+Iy        1.36%      3%   fillets barely affect the minor axis
+J       -11.68%     40%   acutely sensitive to the junction
+```
+
+Computed low on the major axis, barely moved on the minor, badly low in torsion
+— that is the signature of the unmodelled root radii, not of a mistake. The
+*direction and size* of the error are what distinguish the two, which is why the
+tolerances differ per property rather than being one number.
+
+**It found things.** Every UB and UC is internally consistent. Three channels
+are not: their dimensions disagree with their own tabulated area by 5–20%, in
+the wrong direction for fillets. A third independent source settles it — mass
+per metre divided by density:
+
+```
+section       from dims  published  from mass   verdict
+100PFC             1265       1060       1061   DIMENSIONS disagree with the table
+```
+
+Two sources against one, so the dimensions are wrong. They are left as recorded
+and flagged `INCONSISTENT`, because tuning them until the check goes green would
+produce a file that is self-consistent and wrong.
+
+The check does **not** prove the catalogue is right — a section family
+misremembered consistently would pass. What it buys is the elimination of the
+single most likely error, a typo, from a file with three hundred numbers in it.
+Its sensitivity floor is documented and tested too: a flange 10% too thick hides
+inside the fillet band, a flange *width* error does not.
+
+### f_y depends on thickness, not just grade
+
+A Grade 300 UB has a different yield stress in its flange than its web, because
+they are different thicknesses. AS 4100 uses the flange value for flexure and
+the web value for shear. So there is deliberately **no** `grade.fy` — every
+lookup takes a thickness.
+
+```python
+section.fy_flange   # 320 MPa -- what flexure uses
+section.fy_web      # 320 MPa -- what shear uses; higher on a thicker section
+```
+
+### The gate: section capacity is not the answer
+
+For reinforced concrete the section capacity essentially *is* the answer. For
+steel it is not — a beam almost always fails by lateral-torsional buckling
+first. So `check_flexure` **refuses to run** on an undeclared beam:
+
+```python
+>>> as4100.check_flexure(beam, 200*kNm)
+ModelError: check_flexure computes the SECTION capacity, which is the member
+capacity only for a fully restrained segment...
+Either pass fully_restrained=True ... or use as4100.check_member_flexure()
+```
+
+How much it matters, for a 360UB50.7:
+
+```
+restraint   M_b/M_s
+      1 m       99%
+      4 m       53%
+      9 m       24%
+     12 m       18%
+```
+
+A design that stopped at `M_s` would be wrong by a factor of five.
+
+### α_m comes off the real moment diagram
+
+The moment modification factor needs the moments at the quarter, mid and
+three-quarter points — which the solver already produces. So the real diagram is
+used, not the nearest textbook case:
+
+```python
+env = analyse_combinations(member, cases, as1170_uls())
+alpha_m = as4100.alpha_m_from_diagram(env.moment.x, env.moment.max_values, 0, span)
+# 1.166 for a parabolic diagram, against 0.981 for uniform moment
+```
+
+### Restraint spacing is a design variable
+
+For M* = 188 kN·m over 9 m, the section that works depends almost entirely on
+how often you brace it:
+
+```
+restraint spacing   section       mass kg/m
+          9.0 m     530UB92.4          92.4
+          4.5 m     460UB74.6          74.6
+          3.0 m     360UB50.7          50.7
+          1.5 m     360UB44.7          44.7
+```
+
+Halving the restraint spacing is worth more than two section sizes. On a steel
+beam the bracing is a design decision, not a detail.
+
+### What the package will not guess
+
+`k_t`, the twist restraint factor, is **required** for anything but a fully
+restrained segment. AS 4100 gives it as an expression in the section geometry
+and segment length, not a table of constants, so defaulting it to 1.0 would
+treat partial restraint as full:
+
+```python
+as4100.segment(6000, "FF")                 # k_t = 1.0, stated by the standard
+as4100.segment(6000, "FP", kt=1.08)        # read off Table 5.6.3(1)
+as4100.segment(6000, "FP")                 # raises
+```
+
+Load height is the factor people forget — a gravity load on the **top flange**
+is destabilising and costs about 32% of the capacity:
+
+```python
+as4100.segment(6000, "FF", load_height="top flange")   # l_e = 8400, not 6000
+```
+
+### Compression and combined actions
+
+```python
+as4100.check_compression(column, N_star, le=4000, axis="y", alpha_b=0.5)
+as4100.check_combined_member(column, N_star, M_star, seg, le_compression=4000)
+```
+
+The bending and compression effective lengths are **separate arguments**,
+because the bracing that restrains a beam against lateral-torsional buckling is
+often not the bracing that holds a column.
+
+And the reason combined actions exist at all: a member at 70% in compression and
+70% in bending is not at 70% — the interaction is 1.40 and it has failed.
+
+### Not implemented
+
+Connections, web stiffeners and bearing, fatigue, torsional and
+flexural-torsional buckling, biaxial bending, tension members, and composite
+construction (a different standard). The torsion constant `J` is thin-walled and
+runs 10–30% low for a rolled section, which makes `M_o` and therefore `M_b`
+conservative.
 
 ---
 
