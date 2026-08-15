@@ -1,0 +1,74 @@
+{
+  "_comment": [
+    "Typical Australian masonry unit sizes and characteristic unconfined",
+    "compressive strengths f'uc, for AS 3700:2018 Section 3.",
+    "",
+    "This is REFERENCE DATA (ASET component 1) and is UNVERIFIED in the same",
+    "sense as every other table in this package: it is recalled from typical",
+    "manufacturer literature and general practice, not transcribed from a",
+    "specific supplier's current published data sheet or a site-specific test",
+    "report. f'uc in particular varies by manufacturer and product line even",
+    "within one nominal series -- confirm the ACTUAL f'uc for the specified",
+    "unit before using anything derived from this table for an issued design.",
+    "",
+    "work_size is the nominal (length, height, thickness) a unit is specified",
+    "by, mm. thickness is what governs wall thickness and Zd in this package's",
+    "flexure/shear modules."
+  ],
+  "source": "Typical values, general concrete/clay masonry industry literature -- not a specific manufacturer data sheet",
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "units": {"f_uc": "MPa", "work_size": "mm [length, height, thickness]"},
+  "masonry_units": [
+    {
+      "name": "block_90",
+      "description": "90 series hollow concrete block",
+      "category": "hollow_concrete",
+      "f_uc": 15.0,
+      "work_size": [390, 190, 90]
+    },
+    {
+      "name": "block_110",
+      "description": "110 series hollow concrete block",
+      "category": "hollow_concrete",
+      "f_uc": 15.0,
+      "work_size": [390, 190, 110]
+    },
+    {
+      "name": "block_140",
+      "description": "140 series hollow concrete block",
+      "category": "hollow_concrete",
+      "f_uc": 15.0,
+      "work_size": [390, 190, 140]
+    },
+    {
+      "name": "block_190",
+      "description": "190 series hollow concrete block, standard duty",
+      "category": "hollow_concrete",
+      "f_uc": 15.0,
+      "work_size": [390, 190, 190]
+    },
+    {
+      "name": "block_190_high_duty",
+      "description": "190 series hollow concrete block, high duty",
+      "category": "hollow_concrete",
+      "f_uc": 20.0,
+      "work_size": [390, 190, 190]
+    },
+    {
+      "name": "clay_brick",
+      "description": "Standard extruded clay brick",
+      "category": "solid_clay",
+      "f_uc": 25.0,
+      "work_size": [230, 76, 110]
+    },
+    {
+      "name": "concrete_brick",
+      "description": "Standard solid concrete brick",
+      "category": "solid_concrete",
+      "f_uc": 15.0,
+      "work_size": [230, 76, 110]
+    }
+  ]
+}

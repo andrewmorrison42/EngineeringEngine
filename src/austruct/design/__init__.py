@@ -16,6 +16,10 @@ Structure
 ``as5100_5``
     AS 5100.5:2017 provisions. A different shear model from AS 3600:2018, not
     the same model with different constants -- see its ``constants.py``.
+``as3700``
+    AS 3700:2018 masonry provisions -- flexure and shear only, and both as a
+    one-way strip rather than the full two-way panel/in-plane shear-wall
+    methods. See its ``__init__`` for the scope boundary.
 
 Import the code package you are working to, not individual functions, so that
 which standard a calculation was performed to is visible at the call site::
@@ -28,6 +32,6 @@ rather than::
     from austruct.design.as3600.flexure import check_flexure   # ambiguous later
 """
 
-from . import as3600, as4100, as5100_5, rc_common
+from . import as3600, as3700, as4100, as5100_5, rc_common
 
-__all__ = ["rc_common", "as3600", "as4100", "as5100_5"]
+__all__ = ["rc_common", "as3600", "as4100", "as5100_5", "as3700"]

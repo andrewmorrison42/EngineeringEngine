@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 711 tests
+pytest                     # 736 tests
 pip install -e ".[tools]"  # + pydantic/pyyaml, for austruct.tools (see below)
 ```
 
@@ -339,6 +339,7 @@ python examples/07_crown_culvert.py        # arch action, thrust, unbalanced fil
 python examples/08_steel_beam.py           # AS 4100, buckling, restraint spacing
 python examples/09_section_cost_optimisation.py   # cheapest RC section for a given M*
 python examples/10_cantilever_wall.py      # AS 4678 wall, tools/ contracts, save/load
+python examples/11_masonry_wall.py         # AS 3700 flexure and shear, one-way strip
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -927,6 +928,106 @@ flexural-torsional buckling, biaxial bending, tension members, and composite
 construction (a different standard). The torsion constant `J` is thin-walled and
 runs 10–30% low for a rolled section, which makes `M_o` and therefore `M_b`
 conservative.
+
+---
+
+## Masonry to AS 3700
+
+Flexure and shear only, by design — this package does not attempt compression/
+buckling, in-plane shear walls, or two-way panel bending. Every wall is
+designed as a **one-way strip**, exactly like a one-way slab: the same
+simplification as the rest of this section's numbers, stated up front rather
+than discovered by reading the source.
+
+```python
+from austruct.design import as3700
+from austruct.materials.masonry import get_unit, masonry_properties, MortarClass
+from austruct.sections.masonry_section import masonry_wall
+
+unit = get_unit("block_190")
+grade = masonry_properties(unit.f_uc, MortarClass.M3, grouted=True)
+wall = masonry_wall(unit.thickness, grade)
+
+as3700.check_flexure(wall, 2.0 * kNm, direction="vertical", fd=0.15)
+as3700.check_flexure(wall, 2.0 * kNm, direction="horizontal")
+as3700.check_shear(wall, 20 * kN, fd=0.15)
+```
+
+### Three flexural mechanisms, not one
+
+`check_flexure` dispatches on the SECTION, not a flag the caller has to get
+right: a wall with vertical reinforcement in grouted cores always uses the
+reinforced stress-block formula (`direction` is ignored — there is only one
+reinforced mechanism in this scope); an unreinforced wall uses `direction` to
+choose vertical bending (tension perpendicular to the bed joints, the weak
+axis) or horizontal bending (tension parallel, using a `kp` enhancement on
+`f'mt`).
+
+Vertical bending gets a credit for design compressive stress `fd` — self-weight
+of wall above pre-stresses the section against the tension that would
+otherwise crack it first — capped at a documented multiple of `f'mt` so a
+large `fd` cannot imply unbounded capacity. Horizontal bending gets no such
+credit in this simplified strip model.
+
+### The governing check is not always the one you expect
+
+```python
+>>> result = as3700.check_flexure(heavily_reinforced_wall, 6.0 * kNm)
+>>> for check in result.checks:
+...     print(check.describe())
+Ductility, k_u <= limit: 0.4252 <= 0.36  (utilisation 1.181)  FAIL
+Flexural strength, M* <= phi.M_uo: 6 <= 9.4 kN.m/m  (utilisation 0.638)  PASS
+```
+
+Plenty of steel to develop the moment, comfortable strength margin — and it
+still fails, because `ku = a/d` breaches the ductility limit before the
+strength check even gets a vote. `result.utilisation` is the governing value
+across every check, same convention as `as3600`/`as4100`.
+
+### Shear is the bed-joint mechanism, and reinforcement doesn't help it
+
+`check_shear` implements AS 3700's bed-joint friction/bond shear — the
+mechanism that pairs with the one-way bending strip above, resisted across
+the wall's THICKNESS at the support of the spanning strip. It is **not** the
+in-plane shear-wall (racking) check, which resists lateral load in the
+plane of the wall over its LENGTH and is not implemented here.
+
+```python
+>>> as3700.shear_capacity(plain_wall, fd=0.15).get("Vo")
+56000.0
+>>> as3700.shear_capacity(reinforced_wall, fd=0.15).get("Vo")   # same masonry, with bars
+56000.0
+```
+
+The vertical bars that resist flexure do not cross this shear plane the way
+stirrups cross a beam's — crediting them would overstate the capacity, so
+`shear_capacity` returns the identical masonry-only term whether or not the
+section is reinforced. Only `phi` differs, because AS 3700 ties the capacity
+reduction factor to category of construction, not to this particular
+mechanism.
+
+### What this package will not guess
+
+- **Two-way panel bending** (AS 3700 Cl 7.4.3's yield-line method) — a real
+  panel supported on more than two edges is stronger than this one-way strip
+  says. Reading a FAIL here is conservative, not proof the panel fails.
+- **In-plane shear walls** — lateral racking resistance, typically governed
+  by horizontal bond-beam steel this package's `MasonryWallSection` does not
+  model (it holds vertical bars only).
+- **Compression and slenderness/buckling** — in most masonry wall design this
+  is the check that actually governs; it is out of scope here entirely, by
+  request, not oversight.
+- **Detailing** — minimum reinforcement, bar spacing, lap lengths.
+- **The full Table 3.1/3.3 material dependence** — `f'm`, `f'mt` and `f'ms`
+  are derived from simplified formulas in `materials/masonry.py`, not the
+  full unit-height/category tables. Use a tested value wherever precision
+  matters.
+
+[VECTOR] Every constant in `design/as3700/constants.py` and every derivation
+in `materials/masonry.py` is UNVERIFIED, and more heavily simplified than
+this package's AS 3600/AS 4100 modules — confirm against the printed
+standard, or a test report, before issue. `examples/11_masonry_wall.py`
+demonstrates the plumbing, not a checked design.
 
 ---
 

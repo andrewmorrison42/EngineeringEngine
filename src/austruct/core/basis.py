@@ -94,6 +94,13 @@ AS4678_2002 = Standard(
     amendments=(),
 )
 
+AS3700_2018 = Standard(
+    code="AS 3700",
+    edition=2018,
+    title="Masonry structures",
+    amendments=(),
+)
+
 # Used where a value comes from mechanics rather than a standard, so that the
 # basis field is never empty and never silently implies code backing.
 FIRST_PRINCIPLES = Standard(
