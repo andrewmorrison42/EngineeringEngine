@@ -100,7 +100,8 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 675 tests
+pytest                     # 711 tests
+pip install -e ".[tools]"  # + pydantic/pyyaml, for austruct.tools (see below)
 ```
 
 Only runtime dependency is `numpy`. Plotting and reporting are extras:
@@ -337,6 +338,7 @@ python examples/06_box_culvert_frame.py    # closed frame, directed nodes, HTML 
 python examples/07_crown_culvert.py        # arch action, thrust, unbalanced fill
 python examples/08_steel_beam.py           # AS 4100, buckling, restraint spacing
 python examples/09_section_cost_optimisation.py   # cheapest RC section for a given M*
+python examples/10_cantilever_wall.py      # AS 4678 wall, tools/ contracts, save/load
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -990,6 +992,147 @@ a depth and only choosing bars against it.
   `None` when no size in the grid can develop `M*` at all, or no catalogue bar
   fits the width — that means widen the bounds, not that the moment cannot be
   carried.
+
+---
+
+## A bolt-on tools layer: cantilever retaining walls (AS 4678)
+
+Everything above lives in `src/austruct/` — L0 core through L5 report — in
+that layer's own convention: plain floats in mm/N/MPa, no runtime units
+library, no Pydantic. `src/austruct/tools/` sits *on top of* that, for a
+different class of input: an engineering **judgement call** (a backslope, a
+water table depth, how much toe cover to write off for services trenching)
+rather than a code-mandated range. Those get construction-time validation —
+rejected before any calculation runs, not mid-calculation — which is a job
+`Envelope` was never meant to do and a Pydantic model does well.
+
+```bash
+pip install -e ".[tools]"     # pydantic + pyyaml, on top of the core install
+```
+
+`austruct` core stays exactly as dependency-minimal as before — nothing in
+`tools/` is imported by anything under `design/`, `analysis/`, `sections/`,
+or any other L0–L5 package. The wheelhouse/`.exe` distribution path for the
+core layers (see the dependency note at the top of `pyproject.toml`) is
+unaffected; only an install that actually uses `tools/` pulls Pydantic in.
+
+### The contracts convention
+
+Every tool's `*Input` and `*Result` inherit from `austruct.tools.contracts.ToolkitModel`:
+strict on unexpected fields (`extra="forbid"` — a typo'd or stale field is
+rejected loudly, not silently dropped), versioned (`schema_version`), and
+round-trips through one save/load pair:
+
+```python
+from austruct.tools.contracts import save_result, load_result
+
+save_result(result, "wall_1.json")
+reloaded = load_result(WallResult, "wall_1.json")   # RE-validated on the way in
+```
+
+That round trip is the actual mechanism for composing tools later — a
+smaller tool's `Result` becomes a larger tool's `Input` by serialising once
+and re-validating on the way back in, not by trusting an in-memory object to
+still mean what it meant when it was built.
+
+### Usable with geometry plus one soil type
+
+```python
+from austruct.tools.cantilever_wall import WallGeometry, SoilInput, WallInput, analyse
+
+wall = WallInput(
+    geometry=WallGeometry(
+        H_retained=4.0, base_length=3.6, base_thickness=0.55,
+        toe_length=1.0, stem_thickness_top=0.3, stem_thickness_bottom=0.45,
+    ),
+    soil=SoilInput(soil_type="clean_sand", surcharge=5.0, water_table=None),
+)
+result = analyse(wall)
+```
+
+Everything else — `gamma`, `cohesion`, `delta`, `backslope`, base friction,
+passive-neglect depth — defaults, and **every** default or preset-derived
+value is tagged with where it came from, not just quietly substituted:
+
+```python
+>>> result.assumptions
+["Wall friction delta = 20 (default)", "Backslope = 0 (default)"]
+>>> result.resolved_soil.phi
+SourcedValue(value=32.0, source='preset')
+```
+
+`water_table` is the one field with no silent default at all —
+`SoilInput(phi=30.0)` without it raises. A drained design is a decision
+(`water_table=None`), not an assumption this tool is willing to make quietly.
+
+### Material factors flow into the pressure calculation, not the answer
+
+AS 4678 factors soil strength — `Φ_uφ` on `tan(φ)`, `Φ_uc` on cohesion —
+**before** the earth-pressure calculation, not afterwards:
+
+```python
+>>> resolved_soil.phi.value      # characteristic
+32.0
+>>> design_soil.phi_deg          # what Ka actually used
+28.0
+```
+
+Every check reads from one `StabilityLedger` built from those design
+values — self-weight, the soil-on-heel wedge (surcharge included — see
+below), and the earth-pressure thrust, each tagged `stabilising` or
+`destabilising` for its AS 4678 action factor *and, independently*, `resists`
+or `overturns` for its moment about the toe. Those two classifications can
+disagree: a backslope's vertical thrust component is factored as part of the
+(destabilising) earth-pressure action, even though the force itself, acting
+at the back of the footing, resists overturning — a documented, conservative
+simplification, not an oversight.
+
+### Sliding, eccentricity, bearing — ranked, not pass/fail
+
+```python
+>>> for name, check in result.checks.items():
+...     print(name, check.utilisation, check.passed)
+sliding      0.947  True
+eccentricity 0.384  True
+bearing      0.270  True
+>>> result.governing_utilisation, result.passed
+(0.947, True)
+```
+
+Each `CheckSummary.working` is the full `CalcResult.to_dict()` — basis,
+intermediates, every message — not just the number. That is what "every
+check must emit readable working" means here: reused from the same
+`CalcResult` contract the rest of the package uses, rather than a separate
+rendering library, and it survives the save/load round trip intact.
+
+### A known, deliberate divergence source
+
+The closed-form method applies the full surcharge to the virtual plane
+regardless of where it actually sits behind the wall. A trial wedge (Method
+B, not yet built) would exclude surcharge outside the failure wedge — expect
+this method to read conservatively high whenever the surcharge is set well
+back, and treat that as the expected behaviour of a documented
+simplification, not a bug to chase.
+
+### What this pass does not include
+
+- **Method B (Culmann trial wedge) and the divergence report.** Only Method
+  A runs; `WallResult` carries one method result, and nothing claims
+  agreement between methods that were never compared.
+- **Stem/heel/toe reinforced-concrete design** (AS 3600:2018) — the wall
+  stability checks are complete; the concrete member design that follows
+  from them is not yet wired up, though every mechanism it would need
+  (`design.as3600.flexure`, `rc_beam`) already exists in the core layers.
+- **Compaction-induced pressure**, the global-stability geometry screen, and
+  a shear key contribution to sliding.
+- **AS 5100.3 and `working_stress.yaml` factor sets** — only
+  `as4678_class_b.yaml` exists; adding a framework is a new YAML file plus a
+  `FactorSet`, not a code change to any check.
+
+[VECTOR] Every AS 4678 factor, the soil preset library, and the
+Terzaghi/Meyerhof bearing-capacity formula are UNVERIFIED, as declared
+throughout this package. `examples/10_cantilever_wall.py` demonstrates the
+plumbing, not a checked design.
 
 ---
 

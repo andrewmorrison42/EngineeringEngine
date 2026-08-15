@@ -1,0 +1,43 @@
+{
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "source": "Typical values, general geotechnical references (Craig, Bowles). Not transcribed from a specific site investigation or the office's own material specification -- confirm against the actual specified fill before use, and prefer a project-specific SoilInput over a preset wherever a geotechnical report exists.",
+  "presets": [
+    {
+      "name": "clean_sand",
+      "description": "Clean, well-graded sand or sandy gravel, compacted",
+      "phi": 32.0,
+      "gamma": 19.0,
+      "cohesion": 0.0
+    },
+    {
+      "name": "silty_sand",
+      "description": "Sand with a significant silt fraction, compacted",
+      "phi": 28.0,
+      "gamma": 18.0,
+      "cohesion": 0.0
+    },
+    {
+      "name": "gravel",
+      "description": "Clean crushed rock or gravel, compacted",
+      "phi": 35.0,
+      "gamma": 20.0,
+      "cohesion": 0.0
+    },
+    {
+      "name": "stiff_clay",
+      "description": "Stiff clay, drained -- small drained cohesion intercept retained deliberately, do not increase without a site-specific test",
+      "phi": 25.0,
+      "gamma": 19.0,
+      "cohesion": 2.0
+    },
+    {
+      "name": "site_won_fill",
+      "description": "Site-won fill, moisture-conditioned and compacted -- the most variable of these presets; treat as a placeholder pending a compaction/CBR record for the actual material",
+      "phi": 30.0,
+      "gamma": 19.0,
+      "cohesion": 0.0
+    }
+  ]
+}

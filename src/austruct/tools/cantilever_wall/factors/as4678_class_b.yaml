@@ -1,0 +1,58 @@
+# AS 4678:2002 "Earth-retaining structures" -- Class B risk category factors.
+#
+# [VECTOR] UNVERIFIED. Every value below is recorded to the best of the
+# author's knowledge and MUST be confirmed against the printed standard
+# (Table 4.1 material factors, Table 8.3 sliding, and the load factors of
+# Section 5) before this framework is used for an issued calculation.
+#
+# Class B is AS 4678's middle risk category -- broadly, structures where
+# failure would not endanger a major structure, a public road or public
+# safety directly, but is more consequential than a minor Class A retaining
+# structure. Confirm the wall's actual class against Table 3.1 rather than
+# assuming B.
+
+name: "AS 4678 Class B"
+standard: "AS 4678:2002"
+status: UNVERIFIED
+checked_by: null
+checked_on: null
+
+# Material (geotechnical strength) factors, applied to the CHARACTERISTIC
+# soil strength BEFORE any pressure calculation -- these numbers must flow
+# into every pressure method, not be bolted on to a result afterwards.
+#   phi_ug_factor  applies to tan(phi):  tan(phi_design) = phi_ug_factor * tan(phi_char)
+#   cohesion_factor applies directly to c: c_design = cohesion_factor * c_char
+material:
+  phi_ug_factor: 0.85
+  cohesion_factor: 0.70
+
+# Action factors. Simplified to a single destabilising/stabilising pair for
+# this first framework rather than AS 4678's full permanent/variable split --
+# refine once a second load case (e.g. a live surcharge factored separately
+# from self-weight) is actually needed.
+#   destabilising  multiplies actions that increase the demand on a check
+#                  (earth pressure thrust, surcharge, hydrostatic thrust)
+#   stabilising    multiplies actions that resist (wall self-weight, the
+#                  soil-on-heel wedge weight) -- factored DOWN, because a
+#                  self-weight that happens to be helping is not something
+#                  to rely on at its full characteristic value either
+actions:
+  destabilising: 1.50
+  stabilising: 0.90
+
+# Sliding -- an additional geotechnical reduction on the FRICTION resistance,
+# applied on top of the material factor above (i.e. compounding, not
+# alternative to it).
+sliding:
+  friction_reduction: 0.90
+
+# Bearing -- geotechnical strength reduction factor on the ultimate bearing
+# capacity, phi_g in AS 4678/AS 5100.3 notation.
+bearing:
+  geotechnical_reduction: 0.50
+
+# Eccentricity -- limiting e/B. B/6 is the classic middle-third rule (implies
+# no tension under a linear pressure distribution); AS 4678 may set this
+# differently for Class B specifically -- confirm.
+eccentricity:
+  max_e_over_b: 0.16667

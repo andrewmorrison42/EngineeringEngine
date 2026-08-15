@@ -32,6 +32,18 @@ dependencies = [
 [project.optional-dependencies]
 plots = ["matplotlib>=3.7"]
 report = ["jinja2>=3.1"]
+tools = [
+    # The `austruct.tools` package -- bolt-on tools (retaining walls, headwalls,
+    # ...) whose INPUT layer wants construction-time validation with clear
+    # bounds on engineering judgement calls (backslope, water table, passive
+    # neglect depth). Deliberately NOT a dependency of `austruct` core: the
+    # analysis/design layers keep the dependency-minimal, no-Pydantic
+    # convention in core/units.py, because their guardrail is Envelope, not a
+    # model schema, and the wheelhouse/.exe distribution path in the note above
+    # still applies to core. Pydantic here is scoped to `tools/` call sites only.
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
