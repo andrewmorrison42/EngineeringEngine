@@ -6,6 +6,13 @@ and (later) **AS 5100.2:2017**, structured around the six components of the
 
 Version 0.1.0.
 
+**Looking for a list of every calculation this package can run?**
+[`CATALOGUE.md`](CATALOGUE.md) is generated directly from every module's
+`Provenance` registration (`core/registry.py`) — it cannot drift from the
+code the way a hand-written list can, and it's what to check before asking
+"does this do X yet?". This README covers HOW to use each domain; the
+catalogue covers WHAT exists.
+
 ---
 
 ## ⚠ Read this before using any number this produces
@@ -100,7 +107,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 800 tests
+pytest                     # 802 tests
 pip install -e ".[optimise]"  # + scipy, for austruct.study.optimise (see below)
 pip install -e ".[tools]"  # + pydantic/pyyaml, for austruct.tools (see below)
 ```
@@ -1676,7 +1683,10 @@ the flexure solver works on any banded shape.
 
 **A new design check** — add a module under `design/as3600/`, put constants in
 `constants.py`, return a `CalcResult`, register `Provenance` at import with its
-`ASETComponent`.
+`ASETComponent`. Then run `python scripts/generate_catalogue.py` — the new
+module's `description`/`envelope_summary` become its `CATALOGUE.md` row for
+free; `tests/unit/test_catalogue.py` fails the build if this step is
+skipped.
 
 **A new standard** — add a `Standard` to `core/basis.py`, create
 `design/<standard>/` with its own `constants.py`. Reuse `rc_common`; if you find
@@ -1698,8 +1708,11 @@ the sections.
   `Provenance`, independent of the package version.
 - **Module register** — `REGISTRY.summary()` and `REGISTRY.coverage()` are
   generated from the modules themselves, so they cannot drift from reality.
+  `CATALOGUE.md` is the same register, rendered as a browsable per-domain
+  reference instead of a quarterly-review printout — see
+  `scripts/generate_catalogue.py`.
 - **Data register** — `_data.data_verification_report()` does the same for the
   reference tables. A table can be wrong while the code reading it is perfect.
 - **Deprecation** — `VerificationStatus.SUPERSEDED` marks a module retained only
   to reproduce previously issued outputs.
-- **Quarterly review** — those three reports are the input.
+- **Quarterly review** — those four reports are the input.
