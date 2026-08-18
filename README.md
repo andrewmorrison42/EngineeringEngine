@@ -100,7 +100,8 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 736 tests
+pytest                     # 753 tests
+pip install -e ".[optimise]"  # + scipy, for austruct.study.optimise (see below)
 pip install -e ".[tools]"  # + pydantic/pyyaml, for austruct.tools (see below)
 ```
 
@@ -340,6 +341,7 @@ python examples/08_steel_beam.py           # AS 4100, buckling, restraint spacin
 python examples/09_section_cost_optimisation.py   # cheapest RC section for a given M*
 python examples/10_cantilever_wall.py      # AS 4678 wall, tools/ contracts, save/load
 python examples/11_masonry_wall.py         # AS 3700 flexure and shear, one-way strip
+python examples/12_optioneering.py         # sweep schemes across two design domains
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -1237,6 +1239,101 @@ plumbing, not a checked design.
 
 ---
 
+## Optioneering: running variations on a scheme
+
+Most of a design engineer's time on a job that already has a working answer
+goes into RUNNING VARIATIONS on it — a deeper section with less steel, a
+different mortar class, three toe widths for the same wall — and comparing
+the results. `austruct.study` is that workflow, generalised: it does not
+know what a beam or a wall is, only that whatever a check returns has
+`.utilisation` and `.passed` — which every `CalcResult` in this package
+already provides. One engine sweeps every design domain.
+
+```python
+from austruct.study import Scheme, run_sweep
+
+schemes = [
+    Scheme("A", {"D": 600, "diameter": 24}),
+    Scheme("B", {"D": 700, "diameter": 20}),
+]
+result = run_sweep(
+    schemes,
+    build=lambda b, D, diameter: rc_beam(b, D, concrete(32), n_bars=4, diameter=diameter, fitment_spacing=200),
+    check=lambda section: as3600.check_flexure(section, M_star),
+    base={"b": 300},
+    cost=lambda section: section.geometry.area * 1e-6 * 180.0,
+)
+result.governing.scheme.name   # cheapest PASSING scheme -- or None if nothing passed
+```
+
+### The same engine, any design domain
+
+`austruct/study/` imports nothing from `design/`, `sections/` or
+`materials/` — `build` and `check` are supplied by the caller, so the exact
+same `run_sweep()` call sweeps an RC beam, a masonry wall, or a retaining
+wall's stability checks. `examples/12_optioneering.py` runs the identical
+engine against RC flexure and masonry flexure back to back.
+
+### A scheme that doesn't build is reported, not thrown
+
+A malformed row (bad geometry, an envelope breach) is caught and recorded
+with its error — `SweepResult.errored` — rather than stopping the run.
+One bad option in a real six-option list should not hide the other five.
+
+### From a spreadsheet, because that's the shape a brief actually arrives in
+
+```python
+from austruct.study import load_schemes_csv, save_schemes_csv
+```
+
+```
+scheme,D,diameter,notes
+A,600,24,
+B,700,20,deeper and leaner
+C,,,identical to the base scenario
+```
+
+A blank cell means "no override for this scheme" — it inherits the sweep's
+`base` value — not "override to nothing". Column names are whatever the
+caller's `build` function expects; this module has no opinion on what "D"
+means.
+
+### Discrete comparison vs continuous search
+
+`run_sweep()` is for a reviewable, NAMED list of options — the six things
+someone actually asked about, every one of them visible in the output,
+including the ones that fail. For "what is the cheapest section that still
+passes" rather than "which of these passes", `austruct.study.minimize_scheme`
+drives a continuous `scipy.optimize` search over the same `build`/`check`
+shape:
+
+```python
+from austruct.study import minimize_scheme   # needs: pip install -e ".[optimise]"
+
+result = minimize_scheme(
+    variables={"b": (200.0, 600.0), "D": (400.0, 1000.0)},
+    build=build_rc, check=check_rc, cost=cost_rc,
+)
+result.describe()
+# 'converged (...): b=200, D=623  ->  util 1.000  PASS'
+```
+
+`scipy` is an optional extra, not a core dependency — importing
+`austruct.study.optimise` without it works; calling `minimize_scheme()`
+raises with the install instruction. And `scipy.optimize` only ever sees
+the objective and constraint functions handed to it — it has no idea what
+an `Envelope` or a ductility limit is, so `OptimiseResult.result` is always
+a REAL `check(build(**x))` call at the optimiser's final point, re-verified
+rather than trusted. It also has no concept of the DISCRETE choices this
+toolkit is full of — catalogue bar diameters, standard steel sections,
+block-thickness series — those stay on the existing catalogue-search
+pattern (`options_for_area`, `bar_catalogue`, `steel_catalogue`); round a
+continuous optimum to a practical discrete value and re-verify, the same
+"estimate, then verify" pattern `required_steel_area`'s bisection already
+uses.
+
+---
+
 ## Reports someone else can read
 
 A report that reaches a road authority or an independent reviewer is read by a
@@ -1384,12 +1481,15 @@ without a named checker raises.
 | **HLP heavy load platform** | HLP320/HLP400 not implemented; `dla()` raises for them. |
 | **Bridge actions beyond gravity + traffic** | The AS 5100.2 combination set covers permanent and road traffic only — no wind, thermal, shrinkage, earthquake, collision, flood or construction actions. |
 | **Transverse distribution** | Traffic models are returned per lane; distributing onto a particular girder is left to the caller. |
-| **Serviceability checks** | Deflection limits, crack control. `cracked_properties`, `cracking_moment` and the SLS envelopes are the foundation. |
 | **Durability** | Cover and exposure. `Project.exposure` is recorded but not yet acted on. |
 | **Prestress** | Stubbed. |
-| **Torsion, columns, footings** | Out of scope for v0.1. |
+| **RC torsion, columns, footings** | Out of scope for v0.1. |
+| **Steel connections** | AS 4100 Section 9 — bolted/welded connection design is not implemented; member design (flexure, shear, compression, combined actions) is. |
+| **Masonry: two-way panels, in-plane shear walls, compression** | `design/as3700` covers one-way strip flexure and out-of-plane bed-joint shear only, by design — see its README section for the scope boundary. |
+| **Retaining wall: Method B, stem/heel/toe design** | `tools/cantilever_wall` currently proves stability (sliding, eccentricity, bearing) via Method A only; the trial-wedge cross-check and the concrete member design that follows from a passing stability check are not yet wired up. |
 | **Plots and DXF** | Component 6 also covers drawings. The report template has a figures section waiting. |
 | **Multi-layer designations** | The grammar covers one layer per face; more raises rather than silently truncating. |
+| **Job intake / scope-of-work tooling** | Considered and deliberately deferred — see the roadmap discussion for why. |
 
 ---
 

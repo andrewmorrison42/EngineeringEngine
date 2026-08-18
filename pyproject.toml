@@ -44,6 +44,17 @@ tools = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
 ]
+optimise = [
+    # `austruct.study.optimise` -- a continuous scipy.optimize search over
+    # design variables (thicknesses, lengths, cover), layered on the SAME
+    # build/check shape austruct.study.sweep uses. Optional for the same
+    # reason `tools` is: it is a search/orchestration convenience, not part
+    # of the core mechanics, and only an install actually doing continuous
+    # optimisation needs it. Importing austruct.study.optimise without this
+    # extra works; calling minimize_scheme() raises with this install
+    # instruction.
+    "scipy>=1.10",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
