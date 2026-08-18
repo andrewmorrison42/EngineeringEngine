@@ -1700,6 +1700,43 @@ the sections.
 `status`, `checked_by`, `units` and a `_comment` block, and register it in
 `_data.all_data_files()`.
 
+### Likely next directions, and what would help
+
+The patterns above are for extending what's already here. This table is the
+other direction — real gaps (mostly already named in "Not built yet" above),
+and whether the right move is to hand-roll it in this package's own style or
+reach for something that already exists. Cross-checked against
+StructuralPython's `pfse_starterkit` — Connor Ferster's own curated
+dependency list for a Python structural-engineering practice, the same
+Ferster whose ASET framework this package is built around — which is mostly
+a confirmation of calls already made here (`scipy` for `austruct.study`,
+`handcalcs` as a report-renderer candidate) plus a few gaps it's worth being
+explicit about.
+
+Same dependency posture as everywhere else in this README: nothing here
+becomes a core dependency (`pyproject.toml`'s own comment explains why —
+every one is a wheelhouse/`.exe` vendoring cost). Each row below is either an
+optional extra a specific tool opts into, or a standalone cross-check run
+outside the package entirely, never something `design/`, `analysis/` or
+`sections/` import unconditionally.
+
+| Direction | Where it plugs in | Reach for | Why |
+|---|---|---|---|
+| **Arbitrary (non-banded) section geometry** | `sections/` currently does rectangular/banded shapes only | [`sectionproperties`](https://sectionproperties.readthedocs.io/) | Mesh-based — handles composite and irregular shapes, and gets warping/torsion constants right for genuinely non-simple cross-sections in a way the band-integral method here doesn't attempt. |
+| **RC capacity cross-check, moment-curvature, interaction diagrams** | `design/as3600`, `design/as5100_5` | [`concreteproperties`](https://concreteproperties.readthedocs.io/) (built on `sectionproperties`) | Not a replacement for `design/as3600/flexure.py` — a SECOND, independently-implemented method to run the same section through. Two unrelated implementations agreeing is real evidence; one implementation agreeing with itself is not. |
+| **3D frame/truss analysis** | `analysis/frame.py` is 2D (3 DOF/node) only | [`PyNiteFEA`](https://pynite.readthedocs.io/) | Only worth pulling in if a genuine 3D case shows up (a grillage, a tower) — don't reach for it to solve a problem `analysis/frame.py` already covers in-plane. |
+| **Steel connections** (AS 4100 Section 9) | `design/as4100/` has member design, not connections | Hand-roll, same as the rest of `design/as4100` | Bolt-group (elastic or ICR method) and weld-group geometry is squarely AS 4100-specific arithmetic — no general-purpose library does an Australian Standard's connection checks for you. |
+| **Drawings / DXF output** | Component 6 — `report/` has no drawing output yet | [`ezdxf`](https://ezdxf.readthedocs.io/) | The standard pure-Python DXF read/write library. Slots in as a new `Renderer` alongside the markdown/HTML ones — same `report/renderers/` extension point, not a new subsystem. |
+| **Global stability screen** (slip circle) | `tools/cantilever_wall`, `tools/gravity_wall` both flag this as unbuilt | Hand-roll — Bishop's simplified method of slices | A bounded, well-defined geotechnical algorithm, not a generic numerical problem — no obvious off-the-shelf Python library fits it any better than `tools/`'s existing hand-rolled pressure/stability mechanics do. |
+| **Retaining wall optioneering example** | `austruct.study` already sweeps any check — no wall example uses it yet | Nothing new — wire it up | `run_sweep`/`minimize_scheme` don't know what a wall is any more than they know what an RC section is; this is a missing example, not a missing capability. |
+| **Excel round-trip for schedules** | `design_documentation/schedule.py` is CSV-only, deliberately (git-diffable, opens anywhere — see its README section) | [`openpyxl`](https://openpyxl.readthedocs.io/) as an import/export BRIDGE | CSV should stay canonical; an `openpyxl`-based reader/writer for offices that hand around real `.xlsx` files is additive, not a replacement for the diffable format. |
+| **Job intake / scope-of-work tooling** | Considered and explicitly deferred (see "Not built yet") | [`papermodels`](https://github.com/connorferster/papermodels) (Ferster's own PDF-drawing extractor), if this scope ever reopens | Named here for the record, not proposed — the earlier decision not to build this stands. |
+
+`forallpeople` (a units library, also in `pfse_starterkit`) is deliberately
+NOT on this list — `core/units.py` already documents why a live unit object
+was rejected in favour of a plain string convention; that reasoning doesn't
+change just because another curated list includes one.
+
 ---
 
 ## Governance
