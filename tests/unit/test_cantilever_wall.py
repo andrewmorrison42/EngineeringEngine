@@ -319,11 +319,17 @@ def test_heel_soil_weight_uses_the_full_retained_height_above_the_heel():
 # ---------------------------------------------------------------------------
 
 
-def test_an_adequately_sized_wall_passes_every_check():
+def test_an_adequately_sized_wall_passes_stability():
+    """Stability only -- sliding, eccentricity, bearing. Member design
+    (stem/heel/toe) is a separate question: a footing thick enough for
+    bearing/embedment is very often governed by AS 3600 Cl 8.1.6.1's
+    minimum-strength check rather than by its own modest bending, which is
+    realistic, expected behaviour -- see test_cantilever_wall_member_and_culmann.py
+    for that governing case pinned explicitly."""
     wall = WallInput(geometry=_geometry(), soil=_soil())
     result = analyse(wall)
-    assert result.passed
-    assert all(c.passed for c in result.checks.values())
+    stability = ("sliding", "eccentricity", "bearing")
+    assert all(result.checks[k].passed for k in stability)
     assert result.governing_utilisation == max(c.utilisation for c in result.checks.values())
 
 
@@ -335,13 +341,20 @@ def test_an_undersized_wall_fails_and_says_which_check_governs():
     assert any(not c.passed for c in result.checks.values())
 
 
-def test_utilisation_worsens_as_retained_height_grows_for_a_fixed_footing():
+def test_stability_utilisation_worsens_as_retained_height_grows_for_a_fixed_footing():
     """More retained height means more thrust against the same resistance --
-    the governing utilisation should not improve as H grows."""
+    the STABILITY utilisation should not improve as H grows. Restricted to
+    sliding/eccentricity/bearing deliberately: the overall governing
+    utilisation can include a minimum-reinforcement check on the toe/heel
+    whose demand does not track H the same way (see
+    test_an_adequately_sized_wall_passes_stability)."""
     utilisations = []
     for H in (2.5, 3.5, 4.5):
         wall = WallInput(geometry=_geometry(H_retained=H), soil=_soil())
-        utilisations.append(analyse(wall).governing_utilisation)
+        result = analyse(wall)
+        utilisations.append(
+            max(result.checks[k].utilisation for k in ("sliding", "eccentricity", "bearing"))
+        )
     assert utilisations == sorted(utilisations)
 
 

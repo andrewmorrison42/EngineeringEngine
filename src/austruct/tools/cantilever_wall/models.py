@@ -247,6 +247,15 @@ class WallInput(ToolkitModel):
         description="kPa -- ultimate bearing capacity from a geotechnical report, "
         "bypasses the Terzaghi/Meyerhof estimate computed internally",
     )
+    concrete_fc: float = Field(
+        32.0, gt=20.0, le=65.0,
+        description="MPa -- f'c for the stem/heel/toe reinforced concrete design",
+    )
+    cover: float = Field(
+        50.0, gt=20.0, le=100.0,
+        description="mm -- clear cover to reinforcement in the stem/heel/toe, "
+        "against the AS 3600 exposure classification for buried/backfilled concrete",
+    )
     name: str = ""
 
 
@@ -269,8 +278,8 @@ class CheckSummary(ToolkitModel):
 class MethodResult(ToolkitModel):
     """One earth-pressure method's result for one wall."""
 
-    method: Literal["rankine"]
-    Ka: float
+    method: Literal["rankine", "culmann"]
+    Ka: float | None = Field(None, description="Rankine active coefficient -- Method A only")
     Kp: float | None = None
     thrust_horizontal: float = Field(..., description="kN/m, earth pressure only")
     thrust_vertical: float = Field(..., description="kN/m, earth pressure only")
@@ -284,12 +293,35 @@ class MethodResult(ToolkitModel):
     working: dict[str, Any]
 
 
+class DivergenceSummary(ToolkitModel):
+    """Method A vs Method B on one quantity -- see :mod:`.divergence`."""
+
+    quantity: str
+    value_a: float
+    value_b: float
+    divergence: float
+    band: Literal["informational", "warn", "flag"]
+    cause: str
+
+    def describe(self) -> str:
+        return (
+            f"{self.quantity}: A = {self.value_a:.2f}, B = {self.value_b:.2f}  "
+            f"({self.divergence:.1%} divergence, {self.band}) -- {self.cause}"
+        )
+
+
 class WallResult(ToolkitModel):
     """Everything :func:`analyse` produces for one wall, one framework."""
 
     framework: str
     resolved_soil: ResolvedSoil
     method_a: MethodResult
+    method_b: MethodResult | None = Field(
+        None, description="Culmann trial wedge -- None where not run, e.g. a water table is set"
+    )
+    divergence: DivergenceSummary | None = Field(
+        None, description="Method A vs Method B on horizontal thrust -- None where method_b is None"
+    )
     checks: dict[str, CheckSummary]
     governing_utilisation: float
     passed: bool

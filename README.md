@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 753 tests
+pytest                     # 775 tests
 pip install -e ".[optimise]"  # + scipy, for austruct.study.optimise (see below)
 pip install -e ".[tools]"  # + pydantic/pyyaml, for austruct.tools (see below)
 ```
@@ -1098,7 +1098,7 @@ a depth and only choosing bars against it.
 
 ---
 
-## A bolt-on tools layer: cantilever retaining walls (AS 4678)
+## A bolt-on tools layer: cantilever retaining walls (AS 4678 + AS 3600)
 
 Everything above lives in `src/austruct/` — L0 core through L5 report — in
 that layer's own convention: plain floats in mm/N/MPa, no runtime units
@@ -1193,13 +1193,12 @@ simplification, not an oversight.
 ### Sliding, eccentricity, bearing — ranked, not pass/fail
 
 ```python
->>> for name, check in result.checks.items():
+>>> for name in ("sliding", "eccentricity", "bearing"):
+...     check = result.checks[name]
 ...     print(name, check.utilisation, check.passed)
 sliding      0.947  True
 eccentricity 0.384  True
 bearing      0.270  True
->>> result.governing_utilisation, result.passed
-(0.947, True)
 ```
 
 Each `CheckSummary.working` is the full `CalcResult.to_dict()` — basis,
@@ -1208,32 +1207,84 @@ check must emit readable working" means here: reused from the same
 `CalcResult` contract the rest of the package uses, rather than a separate
 rendering library, and it survives the save/load round trip intact.
 
-### A known, deliberate divergence source
+### Stem/heel/toe design — and the check that actually governs
 
-The closed-form method applies the full surcharge to the virtual plane
-regardless of where it actually sits behind the wall. A trial wedge (Method
-B, not yet built) would exclude surcharge outside the failure wedge — expect
-this method to read conservatively high whenever the surcharge is set well
-back, and treat that as the expected behaviour of a documented
-simplification, not a bug to chase.
+`result.checks` also carries `stem_flexure`/`stem_shear`,
+`toe_flexure`/`toe_shear` and `heel_flexure`/`heel_shear` — real AS 3600:2018
+member design (`design.as3600.flexure`/`shear`, `rc_beam`), driven by the
+actual actions this tool's own geometry and pressure methods derive, on a
+DIFFERENT factor regime from the stability checks above: AS 1170.0-style
+load factors (1.35 permanent, 1.5 variable), not the AS 4678 stabilising/
+destabilising pair — see `member_design.py`'s module docstring for why
+reusing the stability factors for a local member would be wrong.
+
+```python
+>>> result.checks["toe_flexure"].passed
+False
+```
+
+A footing thick enough for bearing is routinely governed by AS 3600
+Cl 8.1.6.1's minimum-strength check (`M_uo >= 1.2 M_cr`) rather than by its
+own modest bending — the toe above can pass `M* <= phi.M_uo` at exactly
+1.000 utilisation and still fail overall, because `required_steel_area()`
+bisects on strength only and does not iterate further for the minimum-
+strength check. This is real, common behaviour for a retaining wall
+footing, not a bug — `examples/10_cantilever_wall.py` walks through the
+exact numbers.
+
+### Method B, and a divergence that is real, not noise
+
+`analyse()` also runs a Culmann trial-wedge search (`pressure/culmann.py`)
+and compares it against Method A:
+
+```python
+>>> result.method_a.thrust_horizontal, result.method_b.thrust_horizontal
+(62.16, 62.16)
+>>> result.divergence.describe()
+"Horizontal thrust P_h: A = 62.16, B = 62.16  (0.0% divergence, informational) -- the methods agree"
+```
+
+At zero backslope the two methods match to floating-point precision — a
+genuine cross-check, not a coincidence. With a backslope, they diverge for
+real: Rankine's backslope solution assumes the resultant acts parallel to
+the sloping ground; the Culmann wedge search at zero wall friction assumes
+a horizontal wall reaction. These are two different, both textbook-correct,
+boundary conditions that only coincide at zero backslope — confirmed
+against Coulomb's own closed-form `Ka(phi, beta, delta=0)` formula, which
+the numerical search reproduces exactly. `compare_thrust()` bands the
+result (under 5% informational, 5–15% warn and names the cause, over 15%
+flag) and **never averages the two or silently prefers one** — a "flag"
+divergence fails the wall overall, full stop.
+
+Where `water_table` is set, Method B does not run at all — comparing a
+submerged Method A against a dry-unit-weight Method B would be misleading,
+not merely approximate, so `method_b`/`divergence` come back `None` and
+`notes` says so, rather than either crashing or comparing silently.
+
+This tool's `surcharge` is a single flat, infinite-extent value, with no
+set-back distance — the classic "surcharge behind the failure wedge doesn't
+load the wall" divergence source needs an input this tool does not yet
+have, and worked through algebraically the two methods actually agree
+closely on surcharge alone. Backslope, not surcharge, is this tool's real
+divergence source today.
 
 ### What this pass does not include
 
-- **Method B (Culmann trial wedge) and the divergence report.** Only Method
-  A runs; `WallResult` carries one method result, and nothing claims
-  agreement between methods that were never compared.
-- **Stem/heel/toe reinforced-concrete design** (AS 3600:2018) — the wall
-  stability checks are complete; the concrete member design that follows
-  from them is not yet wired up, though every mechanism it would need
-  (`design.as3600.flexure`, `rc_beam`) already exists in the core layers.
 - **Compaction-induced pressure**, the global-stability geometry screen, and
   a shear key contribution to sliding.
 - **AS 5100.3 and `working_stress.yaml` factor sets** — only
   `as4678_class_b.yaml` exists; adding a framework is a new YAML file plus a
   `FactorSet`, not a code change to any check.
+- **Wall friction (delta) in Method B** — the trial wedge search assumes a
+  frictionless virtual plane, matching Method A's Rankine assumption, so the
+  two remain comparable; crediting wall friction is a real extension.
+- **Cohesion in Method B** — the wedge weight is soil and surcharge only.
+  Where a cohesive soil is genuinely in use, expect Method A (which credits
+  cohesion relief) to read lower than Method B, and the divergence report to
+  name cohesion as the likely cause.
 
-[VECTOR] Every AS 4678 factor, the soil preset library, and the
-Terzaghi/Meyerhof bearing-capacity formula are UNVERIFIED, as declared
+[VECTOR] Every AS 4678/AS 1170.0-style factor, the soil preset library, and
+the Terzaghi/Meyerhof bearing-capacity formula are UNVERIFIED, as declared
 throughout this package. `examples/10_cantilever_wall.py` demonstrates the
 plumbing, not a checked design.
 
@@ -1486,7 +1537,8 @@ without a named checker raises.
 | **RC torsion, columns, footings** | Out of scope for v0.1. |
 | **Steel connections** | AS 4100 Section 9 — bolted/welded connection design is not implemented; member design (flexure, shear, compression, combined actions) is. |
 | **Masonry: two-way panels, in-plane shear walls, compression** | `design/as3700` covers one-way strip flexure and out-of-plane bed-joint shear only, by design — see its README section for the scope boundary. |
-| **Retaining wall: Method B, stem/heel/toe design** | `tools/cantilever_wall` currently proves stability (sliding, eccentricity, bearing) via Method A only; the trial-wedge cross-check and the concrete member design that follows from a passing stability check are not yet wired up. |
+| **Retaining wall: global stability, shear key, compaction pressure** | `tools/cantilever_wall` now covers stability, Method A + Method B with divergence reporting, and stem/heel/toe design; the geometry-based global-stability screen, a shear key contribution to sliding, and compaction-induced pressure remain unbuilt. |
+| **Retaining wall optioneering** | The sweep engine (`austruct.study`) is domain-agnostic and could sweep wall geometry the same way it sweeps an RC section today; no worked example does yet. |
 | **Plots and DXF** | Component 6 also covers drawings. The report template has a figures section waiting. |
 | **Multi-layer designations** | The grammar covers one layer per face; more raises rather than silently truncating. |
 | **Job intake / scope-of-work tooling** | Considered and deliberately deferred — see the roadmap discussion for why. |

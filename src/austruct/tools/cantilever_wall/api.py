@@ -8,10 +8,12 @@ this tool's own m/kN/kPa convention -- see :mod:`.engine` and
 
 from __future__ import annotations
 
-from . import engine
+from . import engine, member_design
 from .checks import check_bearing, check_eccentricity, check_sliding
+from .divergence import compare_thrust
 from .factor_sets import load_factor_set
-from .models import CheckSummary, MethodResult, WallInput, WallResult
+from .models import CheckSummary, DivergenceSummary, MethodResult, WallInput, WallResult
+from .pressure.culmann import culmann_report, trial_wedge_thrust
 from .pressure.rankine import active_thrust, hydrostatic_thrust, rankine_report
 
 
@@ -28,18 +30,19 @@ def analyse(wall: WallInput, framework: str = "as4678_class_b") -> WallResult:
     Returns
     -------
     WallResult
-        Every check plus the earth-pressure method result and the full
-        assumed-vs-supplied input list, in one serialisable, composable
-        object -- see :mod:`austruct.tools.contracts.base` for what
-        "composable" means here.
+        Every check plus both earth-pressure methods (where Method B could
+        run), their divergence, and the full assumed-vs-supplied input
+        list, in one serialisable, composable object -- see
+        :mod:`austruct.tools.contracts.base` for what "composable" means
+        here.
 
     Notes
     -----
-    Only Method A (Rankine, closed form) is implemented -- see the package
-    README for what a trial-wedge Method B and the resulting divergence
-    report would add. ``WallResult`` carries one method result, not two,
-    until that lands; nothing here silently claims agreement between methods
-    that were never actually compared.
+    Method B (the Culmann trial wedge) does not yet model a water table --
+    see ``pressure/culmann.py``. Where ``resolved_soil.water_table`` is set,
+    ``method_b`` and ``divergence`` come back ``None`` rather than either
+    raising or comparing a submerged Method A against a dry Method B, which
+    would be misleading -- see ``notes`` for confirmation this happened.
     """
     factors = load_factor_set(framework)
 
@@ -69,10 +72,21 @@ def analyse(wall: WallInput, framework: str = "as4678_class_b") -> WallResult:
     e = eccentricity_result.get("e")
     bearing_result = check_bearing(wall, design, resolved.gamma.value, ledger, e)
 
+    member_ledger = member_design.member_design_ledger(wall, resolved, design)
+    stem = member_design.design_stem(wall, resolved, design)
+    toe = member_design.design_toe(wall, member_ledger)
+    heel = member_design.design_heel(wall, resolved, member_ledger)
+
     checks = {
         "sliding": _summarise(sliding_result),
         "eccentricity": _summarise(eccentricity_result),
         "bearing": _summarise(bearing_result),
+        "stem_flexure": _summarise(stem.flexure),
+        "stem_shear": _summarise(stem.shear),
+        "toe_flexure": _summarise(toe.flexure),
+        "toe_shear": _summarise(toe.shear),
+        "heel_flexure": _summarise(heel.flexure),
+        "heel_shear": _summarise(heel.shear),
     }
 
     method_a = MethodResult(
@@ -87,22 +101,65 @@ def analyse(wall: WallInput, framework: str = "as4678_class_b") -> WallResult:
         working=pressure_working.to_dict(),
     )
 
-    governing = max(c.utilisation for c in checks.values())
-    passed = all(c.passed for c in checks.values())
-
     notes = [
-        "Only Method A (Rankine, closed form) has been run -- no Method B "
-        "trial wedge yet, so no divergence report is produced.",
-        "Stem/heel/toe reinforced-concrete design (AS 3600:2018) and the "
-        "global-stability geometry screen are not yet implemented.",
+        "Stem/heel/toe concrete design uses AS 1170.0-style load factors "
+        "(1.35 permanent, 1.5 variable), NOT the AS 4678 stability factors "
+        "above -- see member_design.py's module docstring for why.",
+        "The global-stability geometry screen is not yet implemented.",
         "Shear key resistance is not modelled -- sliding resistance is "
         "friction, adhesion and passive only.",
     ]
+
+    method_b: MethodResult | None = None
+    divergence: DivergenceSummary | None = None
+    try:
+        wedge = trial_wedge_thrust(
+            H, design, resolved.gamma.value, resolved.backslope.value,
+            resolved.surcharge.value, resolved.water_table,
+        )
+        wedge_working = culmann_report(
+            H, design, resolved.gamma.value, resolved.backslope.value,
+            resolved.surcharge.value, resolved.water_table,
+        )
+        method_b = MethodResult(
+            method="culmann",
+            Ka=None,
+            Kp=None,
+            thrust_horizontal=wedge.thrust.horizontal,
+            thrust_vertical=wedge.thrust.vertical,
+            thrust_height=wedge.thrust.height,
+            hydrostatic_horizontal=0.0,
+            critical_wedge_angle=wedge.theta_deg,
+            working=wedge_working.to_dict(),
+        )
+        d = compare_thrust(
+            method_a.thrust_horizontal, method_b.thrust_horizontal,
+            resolved.backslope.value, design.cohesion,
+        )
+        divergence = DivergenceSummary(
+            quantity=d.quantity, value_a=d.value_a, value_b=d.value_b,
+            divergence=d.divergence, band=d.band, cause=d.cause,
+        )
+        if divergence.band == "flag":
+            notes.append(
+                f"Methods A and B diverge by {divergence.divergence:.1%} on "
+                "horizontal thrust -- over the adjudication threshold. See "
+                "'divergence' for the likely cause; do not average the two."
+            )
+    except NotImplementedError as exc:
+        notes.append(f"Method B not run: {exc}")
+
+    governing = max(c.utilisation for c in checks.values())
+    passed = all(c.passed for c in checks.values()) and (
+        divergence is None or divergence.band != "flag"
+    )
 
     return WallResult(
         framework=framework,
         resolved_soil=resolved,
         method_a=method_a,
+        method_b=method_b,
+        divergence=divergence,
         checks=checks,
         governing_utilisation=governing,
         passed=passed,
