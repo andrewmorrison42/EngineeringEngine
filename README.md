@@ -100,7 +100,7 @@ multiple domains"*.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                     # 775 tests
+pytest                     # 800 tests
 pip install -e ".[optimise]"  # + scipy, for austruct.study.optimise (see below)
 pip install -e ".[tools]"  # + pydantic/pyyaml, for austruct.tools (see below)
 ```
@@ -342,6 +342,7 @@ python examples/09_section_cost_optimisation.py   # cheapest RC section for a gi
 python examples/10_cantilever_wall.py      # AS 4678 wall, tools/ contracts, save/load
 python examples/11_masonry_wall.py         # AS 3700 flexure and shear, one-way strip
 python examples/12_optioneering.py         # sweep schemes across two design domains
+python examples/13_gravity_wall.py         # modular gravity block wall, NCMA-style ASD
 ```
 
 > **If a moving-load sweep feels far too slow**, it is almost certainly BLAS
@@ -1290,6 +1291,129 @@ plumbing, not a checked design.
 
 ---
 
+## Modular gravity block walls (NCMA-style allowable stress design)
+
+`tools/gravity_wall` — a stack of modular blocks (Redi-Rock, Allan Block,
+Versa-Lok and similar systems all share this shape) held up by its own
+mass alone, no reinforcing steel and no footing. It grew out of a user
+request for exactly this wall type; the manufacturer PDF supplied as a
+starting point turned out to be pre-computed height tables with no
+methodology behind them (confirmed by grepping its extracted text for
+"sliding", "overturning", "factor of safety" and finding nothing), so this
+tool is built to the established **NCMA-style allowable stress design**
+convention instead — the industry-standard approach these systems are
+generally checked against — with a **manufacturer-agnostic** block
+catalogue rather than one tied to a single product line.
+
+**Deliberately a different design philosophy from `cantilever_wall`, not a
+second implementation of the same one.** `cantilever_wall` is AS 4678
+limit-state design: a material factor reduces tan(phi) *before* the
+pressure calculation, and separate action factors load up the resulting
+forces. This tool is allowable stress design: every force uses
+**characteristic** (unfactored) soil strength throughout, and a single
+factor of safety is checked against the *whole system response* — `FS =
+resistance / demand`, e.g. `FS_sliding = R/H >= 1.5`. Reusing
+`cantilever_wall`'s AS 4678 machinery here would have been quietly wrong;
+what IS reused is `cantilever_wall`'s soil model
+(`SoilInput`/`ResolvedSoil`/`resolve_soil`/the preset library) and its
+Terzaghi/Meyerhof bearing-capacity factors, because *those* are not
+specific to either design philosophy.
+
+```python
+from austruct.tools.gravity_wall import (
+    GravityWallGeometry, GravityWallInput, SoilInput, analyse, block_series,
+)
+
+geometry = GravityWallGeometry(n_courses=8, block=block_series("large_60in"), embedment=0.4)
+soil = SoilInput(soil_type="clean_sand", surcharge=5.0, water_table=None)
+result = analyse(GravityWallInput(geometry=geometry, soil=soil))
+
+for name, check in result.checks.items():
+    print(f"{name:<16} FS-utilisation {check.utilisation:.3f}  {'PASS' if check.passed else 'FAIL'}")
+```
+
+### Geometry is a course stack, not a stem/heel/toe
+
+A `BlockSeries` (from the catalogue, or built by hand) carries a course
+`width`, `height` and `setback` — most segmental systems achieve their
+standard batter by stepping each course back a fixed amount from the one
+below (a pin/knob/lip detail), not a sloped block face, so the wall's
+batter angle is *derived* from `setback/height`, never a separate input
+that could disagree with it. `GravityWallGeometry` is just `n_courses`
+plus a `BlockSeries`; there is no separate reinforced-concrete member
+design to do, because the blocks themselves are the gravity mass.
+
+### General Coulomb pressure, and a sign convention worth getting right
+
+`cantilever_wall`'s Rankine method has no wall-batter or wall-friction
+term — a gravity block wall has no heel to erect a Rankine virtual plane
+on, so this tool needs the *general* Coulomb formula instead, with the
+wall's own battered back face and an interface friction angle `delta`.
+This surfaced a genuine trap while building it: Coulomb's own `omega` sign
+convention is **positive when the wall face tilts INTO the backfill**
+(which *increases* Ka), the opposite of what "a wall battering away from
+the soil reduces pressure" intuition suggests. A block wall's own batter
+(always a positive number, `BlockSeries.batter_deg`) is therefore passed
+into the pressure calculation **negated** — `omega_deg =
+-geometry.batter_deg` in `api.py` — and this is pinned by a regression
+test (`test_analyse_negates_batter_deg_for_the_coulomb_sign_convention`)
+precisely because the wrong sign would silently *increase* the reported
+pressure for every wall this tool analyses, in the conservative direction,
+easy to never notice. The degenerate case (`omega = delta = beta = 0`)
+still reduces exactly to `cantilever_wall.pressure.rankine.Ka_rankine` —
+verified to floating-point precision, the same regression-test pattern
+`cantilever_wall`'s own Method A/B cross-check uses.
+
+### Four FS-based checks — three familiar, one new
+
+Sliding, overturning and bearing mirror `cantilever_wall`'s stability
+checks in spirit (same underlying mechanics — friction, a toe-moment
+balance, Meyerhof effective width — just FS-based instead of
+demand/capacity-based, and against characteristic rather than factored
+soil). **Interface shear** has no analogue in a monolithic concrete wall
+at all: a block wall is a *stack of discrete courses*, and nothing stops
+one course sliding on the one below except that interface's own shear
+capacity. This tool checks every course boundary and reports the
+governing one, modelling the interface as a simple linear Mohr-Coulomb law
+(`capacity = c_interface + N.tan(delta_interface)`) — a deliberate
+simplification of how these connectors are actually characterised in
+practice (ASTM D6916 testing produces a bilinear peak/residual envelope,
+not a straight line extending forever); see `checks/interface_shear.py`'s
+module note for exactly where that simplification could read
+unconservative on a tall wall.
+
+### What this tool does not include
+
+- **No passive resistance in sliding** — a block wall's toe is rarely a
+  formed key the way a cantilever footing's is; crediting passive
+  resistance from shallow, often-disturbed fill in front of the wall is a
+  common source of overconfidence in these systems, so this tool doesn't.
+- **No water table.** `GravityWallInput` rejects one outright (raises,
+  rather than silently ignoring it) — a submerged block wall needs a
+  geotechnical review this tool does not attempt to automate.
+- **No cohesion credit in the pressure calculation** — these systems are
+  specified with free-draining granular backfill; a cohesive fill behind
+  one is itself a design deviation, not something to quietly relieve
+  pressure for.
+- **No global stability screen** — the same gap `cantilever_wall` has;
+  `notes` on every result says so rather than silently omitting it.
+- **No geogrid-reinforced segmental walls.** A *gravity* block wall (mass
+  alone provides stability) and a *reinforced* segmental retaining wall
+  (geogrid layers extending into the backfill, resisting a different
+  failure mechanism entirely) are materially different design problems —
+  this tool is the former only.
+
+[VECTOR] The block catalogue's course `height` and `unit_weight` are
+documented placeholders, not transcribed from any manufacturer data sheet
+(the source PDF never states them); the interface friction/cohesion
+defaults, and the FS 1.5 interface-shear minimum, are typical values,
+UNVERIFIED. See `data/block_catalogue.json`'s `source` field and
+`factors.py`'s module docstring for exactly what is and is not backed by
+the source document. `examples/13_gravity_wall.py` demonstrates the
+plumbing, not a checked design.
+
+---
+
 ## Optioneering: running variations on a scheme
 
 Most of a design engineer's time on a job that already has a working answer
@@ -1537,8 +1661,8 @@ without a named checker raises.
 | **RC torsion, columns, footings** | Out of scope for v0.1. |
 | **Steel connections** | AS 4100 Section 9 — bolted/welded connection design is not implemented; member design (flexure, shear, compression, combined actions) is. |
 | **Masonry: two-way panels, in-plane shear walls, compression** | `design/as3700` covers one-way strip flexure and out-of-plane bed-joint shear only, by design — see its README section for the scope boundary. |
-| **Retaining wall: global stability, shear key, compaction pressure** | `tools/cantilever_wall` now covers stability, Method A + Method B with divergence reporting, and stem/heel/toe design; the geometry-based global-stability screen, a shear key contribution to sliding, and compaction-induced pressure remain unbuilt. |
-| **Retaining wall optioneering** | The sweep engine (`austruct.study`) is domain-agnostic and could sweep wall geometry the same way it sweeps an RC section today; no worked example does yet. |
+| **Retaining wall: global stability, shear key, compaction pressure** | `tools/cantilever_wall` now covers stability, Method A + Method B with divergence reporting, and stem/heel/toe design; `tools/gravity_wall` now covers a modular block wall's sliding/overturning/bearing/interface shear. Neither has a global-stability geometry screen; `cantilever_wall` alone is missing a shear key contribution to sliding and compaction-induced pressure. |
+| **Retaining wall optioneering** | The sweep engine (`austruct.study`) is domain-agnostic and could sweep either wall tool's geometry the same way it sweeps an RC section today; no worked example does yet. |
 | **Plots and DXF** | Component 6 also covers drawings. The report template has a figures section waiting. |
 | **Multi-layer designations** | The grammar covers one layer per face; more raises rather than silently truncating. |
 | **Job intake / scope-of-work tooling** | Considered and deliberately deferred — see the roadmap discussion for why. |

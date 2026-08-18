@@ -101,6 +101,20 @@ AS3700_2018 = Standard(
     amendments=(),
 )
 
+# [VECTOR] Not an Australian Standard -- the allowable-stress-design
+# methodology (FS 1.5 sliding/overturning, 2.0 bearing, 1.3 global
+# stability) used for modular gravity block walls is the established
+# US industry convention this manual publishes, not an AS 4678 limit-state
+# provision. Edition year UNVERIFIED -- confirm against the office's actual
+# reference copy before citing a specific edition in an issued document.
+NCMA_SRW_MANUAL = Standard(
+    code="NCMA SRW",
+    edition=2010,
+    title="Design Manual for Segmental Retaining Walls "
+    "(National Concrete Masonry Association)",
+    amendments=(),
+)
+
 # Used where a value comes from mechanics rather than a standard, so that the
 # basis field is never empty and never silently implies code backing.
 FIRST_PRINCIPLES = Standard(

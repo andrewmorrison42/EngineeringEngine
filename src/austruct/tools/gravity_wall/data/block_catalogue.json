@@ -1,0 +1,32 @@
+{
+  "status": "UNVERIFIED",
+  "checked_by": null,
+  "checked_on": null,
+  "source": "Redi-Rock Design Resource Manual V20 (2020), 'Standard Batter Gravity Walls', pp. 94-141 -- read via pdftotext/page images. The width series (28 in / 41 in / 60 in) and the 5 deg standard batter (1-5/8 in = 41 mm setback per course) ARE stated in the manual. Block COURSE HEIGHT and UNIT WEIGHT are NOT stated in the pages reviewed (only pre-computed max-height tables were present, no methodology or dimensioned section); the values below are typical placeholders for a solid/grouted gravity block course, not transcribed from any manufacturer data sheet. This catalogue is deliberately manufacturer-agnostic -- treat every row as a starting point and replace height/unit_weight with the actual manufacturer's data sheet values before issuing a design. See austruct.tools.gravity_wall.blocks module docstring.",
+  "series": [
+    {
+      "name": "compact_28in",
+      "description": "Compact gravity block, nominal 28 in (710 mm) width",
+      "width": 0.710,
+      "height": 0.406,
+      "setback": 0.041,
+      "unit_weight": 21.5
+    },
+    {
+      "name": "standard_41in",
+      "description": "Standard gravity block, nominal 41 in (1030 mm) width",
+      "width": 1.030,
+      "height": 0.406,
+      "setback": 0.041,
+      "unit_weight": 21.5
+    },
+    {
+      "name": "large_60in",
+      "description": "Large gravity block, nominal 60 in (1520 mm) width",
+      "width": 1.520,
+      "height": 0.406,
+      "setback": 0.041,
+      "unit_weight": 21.5
+    }
+  ]
+}
