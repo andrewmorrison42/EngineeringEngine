@@ -94,11 +94,11 @@ def _kv_theta_simplified(
     AS 3600:2018 Cl 8.2.4.2.
 
     With at least minimum shear reinforcement: ``k_v = 0.15``, ``theta_v = 36 deg``.
-    Otherwise: ``k_v = 200/(1000 + 1.3 d) <= 0.10``, ``theta_v = 36 deg``.
+    Otherwise: ``k_v = 200/(1000 + 1.3 d) <= 0.10``, ``theta_v = 36 deg``,
+    with ``d`` the depth selected by ``constants.KV_NO_STEEL_DEPTH_IS_DO``
+    (currently ``d_v``).
 
-    [VECTOR] UNVERIFIED, and note the unresolved question of whether the depth
-             term in the second expression is ``d_o`` or ``d_v`` -- see
-             ``constants.KV_NO_STEEL_DEPTH_IS_DO``.
+    [VECTOR] UNVERIFIED -- see ``constants.KV_NO_STEEL_DEPTH_IS_DO``.
     """
     theta = C.THETA_V_SIMPLIFIED
     if has_min_steel:

@@ -149,21 +149,21 @@ KV_NO_STEEL_NUMERATOR = 200.0
 KV_NO_STEEL_DENOM_CONST = 1000.0
 KV_NO_STEEL_DENOM_FACTOR = 1.3
 KV_NO_STEEL_CAP = 0.10
-"""k_v = 200 / (1000 + 1.3 d_o) <= 0.10 where less than minimum shear
+"""k_v = 200 / (1000 + 1.3 d_v) <= 0.10 where less than minimum shear
 reinforcement is provided.
 
-[BASIS]  Cl 8.2.4.2.
-[VECTOR] UNVERIFIED, and specifically UNCONFIRMED whether the depth term is
-         d_o or d_v. The two differ by roughly 10-25% in a typical beam, and
-         the resulting k_v differs by a few percent. Resolve this against the
-         printed clause before relying on an unreinforced-web shear capacity.
-         See KV_NO_STEEL_DEPTH_IS_DO below."""
+[BASIS]  Cl 8.2.4.2 -- the depth term is d_v, the effective shear depth,
+         matching the general method's use of d_v elsewhere in the same
+         clause (Cl 8.2.4.3).
+[VECTOR] UNVERIFIED -- resolve against the printed clause before relying on
+         an unreinforced-web shear capacity. See KV_NO_STEEL_DEPTH_IS_DO
+         below."""
 
-KV_NO_STEEL_DEPTH_IS_DO = True
+KV_NO_STEEL_DEPTH_IS_DO = False
 """Switch controlling which depth the k_v expression above uses.
 True  -> d_o (depth to the outermost tensile bar)
-False -> d_v (effective shear depth)
-[VECTOR] UNVERIFIED. Set this from the printed clause."""
+False -> d_v (effective shear depth) -- current best reading of Cl 8.2.4.2.
+[VECTOR] UNVERIFIED. Confirm from the printed clause."""
 
 ASV_MIN_COEFFICIENT = 0.08
 """(A_sv/s)_min = 0.08 . sqrt(f'c) . b_v / f_sy.f.

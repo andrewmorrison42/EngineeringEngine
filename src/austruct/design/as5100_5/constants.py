@@ -64,12 +64,15 @@ CLAUSE_STRESS_BLOCK = ClauseRef(STANDARD, "8.1.3", note="Rectangular stress bloc
 CLAUSE_DUCTILITY = ClauseRef(STANDARD, "8.1.5", note="Ductility limit on k_uo")
 CLAUSE_MIN_STEEL = ClauseRef(STANDARD, "8.1.6", note="Minimum strength requirement")
 
-KUO_LIMIT = 0.36
+KUO_LIMIT = 0.4
 """Maximum k_uo.
 
-[VECTOR] UNVERIFIED and UNCONFIRMED. AS 3600:2009 used 0.4; AS 3600:2018 uses
-         0.36. Which AS 5100.5:2017 adopts must be confirmed -- it changes
-         where compression reinforcement becomes necessary."""
+[BASIS] AS 5100.5:2017 follows the AS 3600:2009 family (see the module
+        docstring above), which used k_u <= 0.4 -- not the 0.36 limit
+        introduced alongside AS 3600:2018's k_uo-dependent phi expression,
+        which AS 5100.5 does not use (phi for flexure is the flat 0.80
+        above). [VECTOR] UNVERIFIED -- confirm 0.4 against the printed
+        AS 5100.5:2017 Cl 8.1.5."""
 
 MIN_STRENGTH_FACTOR = 1.2
 """(M_uo)min >= 1.2 M_cr. [VECTOR] UNVERIFIED."""

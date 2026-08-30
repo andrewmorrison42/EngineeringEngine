@@ -7,7 +7,7 @@ answers every question the design layer will put to it.
 
     >>> c = concrete(40)
     >>> c.Ec, c.fctf, c.alpha2, c.gamma
-    (32800.0, 3.79..., 0.88 -> clipped 0.85, 0.77)
+    (32800.0, 3.79..., 0.79, 0.87 -> clipped 0.85)
 
 [UNITS] N, mm, MPa throughout, except `density` which stays kg/m^3 because
         that is the unit AS 3600 Cl 3.1.2 uses. See core/units.py.
@@ -159,19 +159,18 @@ class Concrete:
     def alpha2(self) -> float:
         """alpha_2 -- ratio of the uniform stress block intensity to f'c.
 
-        [BASIS]  AS 3600:2018 Cl 8.1.3
-        [VECTOR] UNVERIFIED -- expression and both clip bounds.
+        [BASIS]  AS 3600:2018 Cl 8.1.3: alpha_2 = 0.85 - 0.0015.f'c >= 0.67.
         """
-        return _clip(1.0 - 0.003 * self.fc, 0.67, 0.85)
+        return _clip(0.85 - 0.0015 * self.fc, 0.67, 1.0)
 
     @property
     def gamma(self) -> float:
         """gamma -- ratio of the stress block depth to the neutral axis depth.
 
-        [BASIS]  AS 3600:2018 Cl 8.1.3
-        [VECTOR] UNVERIFIED -- expression and both clip bounds.
+        [BASIS]  AS 3600:2018 Cl 8.1.3: gamma = 0.97 - 0.0025.f'c,
+                 bounded 0.67 <= gamma <= 0.85.
         """
-        return _clip(1.05 - 0.007 * self.fc, 0.67, 0.85)
+        return _clip(0.97 - 0.0025 * self.fc, 0.67, 0.85)
 
     @property
     def epsilon_cu(self) -> float:
