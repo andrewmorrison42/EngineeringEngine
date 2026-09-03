@@ -1,0 +1,5 @@
+(.venv) $ python -c "import austruct; print(austruct.__version__, austruct.__file__)"
+0.1.0 /home/user/EngineeringEngine/src/austruct/__init__.py
+
+(.venv) $ pytest -q
+799 passed, 3 skipped in 173.67s (0:02:53)

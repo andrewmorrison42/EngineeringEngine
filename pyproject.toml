@@ -113,3 +113,8 @@ ignore = [
 # Unused imports (F401) are still flagged, because an import a notebook never
 # uses tells the reader something is needed when it is not.
 "notebooks/*.ipynb" = ["I001", "E402"]
+# The tutorial job files are teaching artifacts. Their import block is grouped
+# deliberately -- installed library above, the engineer's own sibling module
+# below the blank line -- because that grouping is the lesson. isort would move
+# `import job_data` to the top of the block and destroy it.
+"tutorials/*/job/*.py" = ["I001"]

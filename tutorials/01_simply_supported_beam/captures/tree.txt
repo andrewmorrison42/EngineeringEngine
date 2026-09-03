@@ -1,0 +1,25 @@
+(.venv) $ tree ~/jobs/25-0142-northbank
+
+25-0142-northbank/                 <- ONE folder per job. Not one per beam.
+|-- job/
+|   |-- job_data.py                <- the job: geometry, loads, wind, the record
+|   `-- beam_B1.py                 <- the member: analysis + design + report
+`-- outputs/                       <- everything the run produces, nothing you type
+    |-- B1_diagrams.png
+    |-- B1_envelope.png
+    |-- B1_section.png
+    |-- B1_report.html
+    `-- B1_report.md
+
+(.venv) $ tree ~/code/engineeringengine -L 2   # the LIBRARY -- a different folder
+
+engineeringengine/
+|-- pyproject.toml
+|-- src/austruct/
+|   |-- materials/                 [1] reference data
+|   |-- project/  loads/           [2] project data
+|   |-- analysis/ structures/      [3] fast demand calculation
+|   |-- design_documentation/      [4] design documentation
+|   |-- design/   sections/        [5] design verification
+|   `-- report/                    [6] reporting
+`-- tests/                         799 passing

@@ -1,0 +1,32 @@
+>>> from austruct.core.units import kNm
+>>> from austruct.design import as3600
+>>> from austruct.design_documentation import parse
+>>> section = parse("350 x 650 | C32 | COV 40 | BOT 3-N24 | LIG N12-2L@250")
+>>> flexure = as3600.check_flexure(section, 296.1 * kNm)
+>>> for ref in flexure.basis:
+...     print("  ", ref)
+   AS 3600:2018 Cl 8.1.2 -- Ultimate strength in bending
+   AS 3600:2018 Cl 8.1.3 -- Rectangular stress block
+   AS 3600:2018 Table 2.2.2 -- Capacity reduction factors
+   AS 3600:2018 Cl 8.1.5 -- Ductility limit on k_uo
+   AS 3600:2018 Cl 8.1.6.1 -- Minimum strength requirement
+>>> for c in flexure.checks:
+...     print(f"   {c.label:<34} {c.actual / c.display_factor:9.2f} {c.operator} "
+...           f"{c.limit / c.display_factor:9.2f} {c.display_unit or c.unit}")
+   Ductility, k_uo                         0.15 <=      0.36 -
+   Minimum strength, M_uo >= 1.2 M_cr    373.47 >=    109.57 kN.m
+   Flexural strength, M* <= phi.M_uo     296.10 <=    317.45 kN.m
+>>> for lim in flexure.envelope.limits:
+...     print(f"   {lim.name:<10} {lim.value:8.0f} {lim.unit:<8} allowed {lim.lower:g} to {lim.upper:g}")
+   f'c              32 MPa      allowed 20 to 100
+   f'c              32 MPa      allowed 20 to 100
+   density        2400 kg/m^3   allowed 1800 to 2800
+>>> for note in flexure.envelope.notes:
+...     print("   -", note)
+   - Non-prestressed reinforced concrete only. No axial force.
+   - Sagging bending with the compression face at the top of the section as supplied. Model hogging by inverting the section.
+   - Torsion, lateral instability of slender beams and the effects of sustained load are not considered.
+>>> flexure.provenance.module
+'austruct.design.as3600.flexure'
+>>> flexure.provenance.status.value
+'UNVERIFIED'

@@ -1,0 +1,13 @@
+(.venv) $ pytest tests/golden -q -s
+.......
+6 of 6 golden vectors are UNVERIFIED (checked_by = PENDING):
+  - beam_analysis.yaml::SS-UDL-01
+  - beam_analysis.yaml::SS-PT-CENTRAL-01
+  - beam_analysis.yaml::CANT-UDL-01
+  - beam_analysis.yaml::PROP-UDL-01
+  - beam_analysis.yaml::FIXED-UDL-01
+  - beam_analysis.yaml::CONT-2SPAN-UDL-01
+
+These modules are NOT cleared for issue. Verify each expectation against its cited source and record the engineer's name and date.
+.
+8 passed in 0.36s

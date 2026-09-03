@@ -1,0 +1,5 @@
+$ python beam_B1.py          # note: no (.venv) in the prompt
+Traceback (most recent call last):
+  File "/home/user/EngineeringEngine/tutorials/01_simply_supported_beam/job/beam_B1.py", line 15, in <module>
+    from austruct.analysis import UDL, PointLoad, SelfWeight, analyse_combinations, simply_supported
+ModuleNotFoundError: No module named 'austruct'

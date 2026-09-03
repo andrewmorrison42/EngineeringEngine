@@ -1,0 +1,82 @@
+SECTION
+    Section    = B1
+    D          = 650 mm
+    A_g        = 227500 mm^2
+    y_c        = 325.0 mm from top
+    I_g        = 8.01e+09 mm^4
+    Z_bottom   = 2.465e+07 mm^3
+    b_v        = 350 mm
+    
+    Concrete:
+      f'c        = 32 MPa
+      density    = 2400 kg/m^3
+      Ec         = 30100 MPa  (source: table)
+      f'ct       = 2.04 MPa
+      f'ct.f     = 3.39 MPa
+      alpha_2    = 0.850
+      gamma      = 0.826
+      epsilon_cu = 0.0030
+    
+    Longitudinal reinforcement:
+      3-N24 at d = 586 mm (bottom main)
+    
+    Fitments:  N12-2leg @ 250
+
+LOAD CASES (unfactored)
+    G_roof     G   UDL          18.79 kN/m
+    G_roof     G   SelfWeight    5.36 kN/m
+    Q_roof     Q   UDL           0.90 kN/m
+    Q_roof     Q   PointLoad     40.0 kN at 3.0 m
+    Wu_uplift  Wu  UDL          -3.98 kN/m
+
+COMBINATIONS (AS/NZS 1170.0 Cl 4.2.2, psi factors from the occupancy)
+    ULS1: 1.35G
+    ULS2: 1.2G + 1.5Q
+    ULS3: 1.2G + 0.6Q (long term)
+    ULS4: 1.2G + Wu + 0.4Q
+    ULS5: 0.9G + Wu  (uplift/reversal)
+    ULS6: G + Eu + 0.4Q
+    ULS7: 1.2G + Su + 0.4Q
+
+ENVELOPE
+Envelope: B1  [ULS]
+  7 combination(s) analysed
+
+    ULS1: 1.35G
+    ULS2: 1.2G + 1.5Q
+    ULS3: 1.2G + 0.6Q (long term)
+    ULS4: 1.2G + Wu + 0.4Q
+    ULS5: 0.9G + Wu  (uplift/reversal)
+    ULS6: G + Eu + 0.4Q
+    ULS7: 1.2G + Su + 0.4Q
+
+Governing actions:
+  M_max (sagging)       296.07 kN.m  at x =  3.000 m   [ULS2]
+  M_min (hogging)         0.00 kN.m  at x =  0.000 m   [ULS1]
+  V_max                 144.18 kN    at x =  0.000 m   [ULS2]
+  V_min                -134.18 kN    at x =  7.200 m   [ULS2]
+  Deflection max          6.26 mm    at x =  3.538 m   [ULS2]
+
+Reactions (positive upward):
+  A            max    144.18 kN [ULS2]   min     63.90 kN [ULS5]
+  B            max    134.18 kN [ULS2]   min     63.90 kN [ULS5]
+
+AS 3600:2018 CHECKS
+    M* =   296.1 kN.m  [ULS2]   phi.Muo =   317.4 kN.m   util 0.933  PASS
+    V* =   126.4 kN    [ULS2]   phi.Vu  =   339.5 kN     util 0.372  PASS
+
+    Reversal check: M*_hogging = 0.0 kN.m  ->  no reversal, section as detailed
+
+    Bar arrangements that would satisfy the required area:
+      Required As = 1260 mm^2
+      
+      Arrangement      As prov    Excess
+      ----------------------------------
+      12-N12              1357      7.7%
+      3-N24               1357      7.7%
+      7-N16               1407     11.7%
+      5-N20               1571     24.7%
+      2-N32               1608     27.7%
+
+REPORT   all checks pass: True   issuable: False
+         figures and report written to outputs/

@@ -1,0 +1,11 @@
+>>> from datetime import date
+>>> from austruct.core.provenance import GoldenVector, Provenance, VerificationStatus
+>>> Provenance(module="my.flexure", version="1.0", author="A. Morrison",
+...            status=VerificationStatus.VERIFIED)
+ValueError: Module 'my.flexure' claims VERIFIED status without a named checker. Phase 3 rule: no module enters the catalog without golden vectors and a named checker.
+>>> Provenance(module="my.flexure", version="1.0", author="A. Morrison",
+...            status=VerificationStatus.VERIFIED, checker="J. Nguyen",
+...            checked_on=date(2026, 9, 1),
+...            vectors=(GoldenVector("FLEX-01", "Warner et al. Example 3.4",
+...                                  "J. Nguyen", date(2026, 9, 1)),)).issuable
+True

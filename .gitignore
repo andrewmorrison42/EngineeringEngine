@@ -16,3 +16,6 @@ notebooks/*.png
 **/.ipynb_checkpoints/
 b1_diagrams.png
 culvert_c1_report.html
+
+# Tutorial build artefact -- regenerate with tutorials/01_simply_supported_beam/build_tutorial.py
+tutorials/*/tutorial.html

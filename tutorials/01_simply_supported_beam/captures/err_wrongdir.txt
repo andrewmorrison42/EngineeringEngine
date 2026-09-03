@@ -1,0 +1,8 @@
+(.venv) $ cd ~/jobs/25-0142-northbank          # one level above the script
+(.venv) $ python job/beam_B1.py                # with a bare OUT = "../outputs"
+   ...analysis and design output, as normal...
+Traceback (most recent call last):
+  File "./job/beam_B1.py", line 137, in <module>
+    plots.save(fig_dia, f"{OUT}/B1_diagrams.png")
+   ... 9 frames inside matplotlib and PIL omitted ...
+FileNotFoundError: [Errno 2] No such file or directory: '../outputs/B1_diagrams.png'
