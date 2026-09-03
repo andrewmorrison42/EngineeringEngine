@@ -1,0 +1,24 @@
+>>> from austruct.design import as3600
+>>> [n for n in dir(as3600) if not n.startswith("_")]
+['CostRates', 'DevelopmentLength', 'OptimisationResult', 'SearchBounds', 'SectionCost', 'SizeRange', 'cd_dimension', 'check_bar_fit', 'check_crack_control', 'check_deflection', 'check_detailing', 'check_flexure', 'check_shear', 'check_span_to_depth', 'compression_development_length', 'constants', 'curtailment_extension', 'detailing', 'development_length', 'effective_shear_depth', 'effective_stiffness', 'flexure', 'ief_max', 'lap_length', 'minimum_clear_spacing', 'minimum_cost_section', 'minimum_shear_reinforcement', 'minimum_steel_area', 'moment_capacity', 'optimise', 'redistribution_limit', 'required_shear_reinforcement', 'required_steel_area', 'serviceability', 'shear', 'shear_capacity']
+>>> print(as3600.check_shear.__doc__[:900])
+Check a section's shear capacity against a design shear force.
+
+    Basis
+    -----
+    As :func:`shear_capacity`, plus ``V* <= phi.V_u`` (Cl 2.2.2).
+
+    Parameters
+    ----------
+    V_star:
+        Design shear force (N), magnitude. Take it from
+        :meth:`~austruct.analysis.results.BeamResults.shear_at_d_from_support`
+        where the support introduces compression, or from
+        :attr:`~austruct.analysis.results.BeamResults.max_shear` otherwise.
+    M_star:
+        Coexisting design moment (N.mm). Used by the general method only.
+
+    Returns
+    -------
+    CalcResult
+    

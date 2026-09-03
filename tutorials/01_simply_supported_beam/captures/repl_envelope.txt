@@ -1,0 +1,5 @@
+>>> from austruct.materials import concrete
+>>> concrete(150)
+austruct.core.exceptions.OutsideEnvelope: Inputs outside validity envelope [Concrete properties (AS 3600:2018)]: 20 <= f'c <= 100 MPa  [actual 150]  OUTSIDE
+>>> concrete(100)
+Concrete(fc=100.0, density=2400.0, standard=Standard(code='AS 3600', edition=2018, title='Concrete structures', amendments=()), fcmi=99.0, fcm=110.0, Ec=42200.0, ec_source='table')

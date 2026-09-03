@@ -1,0 +1,16 @@
+>>> from austruct.core.units import kNm
+>>> from austruct.design import as3600
+>>> from austruct.design_documentation import parse
+>>> M_star = 296.1 * kNm
+>>> trial = parse("350 x 650 | C32 | COV 40 | BOT 3-N20 | LIG N12-2L@250")
+>>> first = as3600.check_flexure(trial, M_star)
+>>> print(f"{first.utilisation:.3f}  {'PASS' if first.passed else 'FAIL'}")
+1.312  FAIL
+>>> as3600.required_steel_area(trial, M_star).get("Ast_req")
+1255.2780456542969
+>>> trial.Ast
+942.4777960769379
+>>> better = parse("350 x 650 | C32 | COV 40 | BOT 3-N24 | LIG N12-2L@250")
+>>> second = as3600.check_flexure(better, M_star)
+>>> print(f"{second.utilisation:.3f}  {'PASS' if second.passed else 'FAIL'}")
+0.933  PASS

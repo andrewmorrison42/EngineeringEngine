@@ -1,0 +1,21 @@
+>>> from austruct.materials import concrete, bar_area
+>>> grade = concrete(32)
+>>> grade.fc
+32.0
+>>> grade.Ec
+30100.0
+>>> grade.alpha_2
+AttributeError: 'Concrete' object has no attribute 'alpha_2'
+>>> [n for n in dir(grade) if not n.startswith("_")]
+['Ec', 'alpha2', 'density', 'describe', 'ec_source', 'envelope', 'epsilon_cu', 'fc', 'fcm', 'fcmi', 'fct', 'fctf', 'gamma', 'sqrt_fc', 'standard']
+>>> grade.alpha2
+0.85
+>>> print("\n".join(grade.describe()[:6]))
+f'c        = 32 MPa
+density    = 2400 kg/m^3
+Ec         = 30100 MPa  (source: table)
+f'ct       = 2.04 MPa
+f'ct.f     = 3.39 MPa
+alpha_2    = 0.850
+>>> bar_area(24)
+452.3893421169302

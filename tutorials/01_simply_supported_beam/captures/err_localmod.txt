@@ -1,0 +1,9 @@
+(.venv) $ cd ~/jobs/25-0142-northbank          # one level above the script
+(.venv) $ python -c "import job_data"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'job_data'
+
+(.venv) $ cd job
+(.venv) $ python -c "import job_data; print(job_data.SPAN)"
+7200.0
