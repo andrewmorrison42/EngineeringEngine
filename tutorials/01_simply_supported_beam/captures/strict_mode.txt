@@ -1,0 +1,3 @@
+$ AUSTRUCT_STRICT=1 python -c "from austruct.design import as3600"
+    raise UnverifiedConstant(
+austruct.core.exceptions.UnverifiedConstant: Module 'austruct.core.contract' has verification status UNVERIFIED and strict mode is enabled. Verify the module and record a named checker, or disable strict mode for development use.

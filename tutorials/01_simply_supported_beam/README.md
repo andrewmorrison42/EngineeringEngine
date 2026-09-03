@@ -1,6 +1,6 @@
 # Tutorial 01 — Calling vetted calculation modules from a job file
 
-A 24-page tutorial for an engineer who reads design codes fluently and Python
+A 29-page tutorial for an engineer who reads design codes fluently and Python
 slowly. It walks one real job — a simply supported roof beam, analysed over the
 AS/NZS 1170.0 ultimate combinations and designed for flexure and shear to
 AS 3600:2018 — and uses it to teach the thing the toolkit exists for: keeping
@@ -13,7 +13,7 @@ imports it.
 
 | Path | What it is |
 |---|---|
-| `Tutorial_01_Beam_B1.pdf` | The tutorial. 24 pages, ~30 screenshots. |
+| `Tutorial_01_Beam_B1.pdf` | The tutorial. 29 pages, ~30 screenshots, ending in a one-page reference card. |
 | `tutorial.html` | The same document before printing. Build artefact, not committed. |
 | `job/job_data.py` | The job: project record, geometry, areal loads, site wind to AS/NZS 1170.2. |
 | `job/beam_B1.py` | The member: section, load cases, analysis, AS 3600 checks, figures, report. |

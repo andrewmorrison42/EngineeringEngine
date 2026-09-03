@@ -1,0 +1,13 @@
+>>> from austruct.core.units import kNm
+>>> from austruct.design import as3600
+>>> from austruct.design_documentation import parse
+>>> phiMuo = 317.4e6
+>>> phiMuo.basis
+AttributeError: 'float' object has no attribute 'basis'
+>>> flexure = as3600.check_flexure(parse("350 x 650 | C32 | BOT 3-N24 | LIG N12-2L@250"), 296.1 * kNm)
+>>> flexure.get("phiMuo") / kNm
+317.4457209948809
+>>> next(iter(flexure.basis))
+ClauseRef(standard=Standard(code='AS 3600', edition=2018, title='Concrete structures', amendments=()), clause='8.1.2', table='', figure='', equation='', note='Ultimate strength in bending')
+>>> flexure.passed
+True

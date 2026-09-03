@@ -269,6 +269,24 @@ table.data td:first-child code { white-space: nowrap; }
 
 .pagebreak { page-break-before: always; }
 .avoid { page-break-inside: avoid; }
+.card { page-break-before: always; }
+.card h2 { margin-top: 0; }
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 7mm;
+  align-items: start; }
+.card .blk { break-inside: avoid; margin-bottom: 4mm; }
+.card .blk h4 { margin: 0 0 1.2mm; font-size: 8.6pt; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--accent); border-bottom: 1px solid var(--rule);
+  padding-bottom: .8mm; }
+.card .blk p, .card .blk li { font-size: 8pt; line-height: 1.4; margin: 0 0 1mm; }
+.card .blk ul { padding-left: 4mm; margin: 0; }
+.card .blk code { font-size: 7.6pt; background: #f2f4f7; }
+.card table.mini { width: 100%; border-collapse: collapse; font-size: 7.8pt; }
+.card table.mini td { padding: .7mm 1.2mm; border-bottom: 1px solid #e8ecf1;
+  vertical-align: top; }
+.card table.mini td:first-child { white-space: nowrap; padding-right: 2mm; }
+.card table.mini code { background: none; padding: 0; }
+.card footer.doc { margin-top: 3mm; padding-top: 2mm; }
+
 footer.doc { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid var(--rule);
   font-size: 8.2pt; color: var(--ink-3); }
 """
@@ -494,15 +512,18 @@ bare float, carrying six things:</p>
 <tr><td><code>.provenance</code></td><td>Version, author, checker, verification status</td></tr>
 </table>
 
-<p>That is why the report in part 11 needs no assembly: the results already carry everything a
-report has to show.</p>
+<p>The point is easiest to see by trying to do without it. A float knows nothing about
+where it came from; a <code>CalcResult</code> is still a number when you want one, and
+everything else when you need it.</p>
+
+{cap("repl_float", "python", "<b>Screenshot 4.3</b> &mdash; <code>flexure.get(&quot;phiMuo&quot;)</code> is the number. <code>flexure.basis</code> is the clause it came from, and <code>flexure.passed</code> is the verdict. Return a float instead and the report in part 11 has nothing to print, the checker has nothing to check, and the envelope that was enforced is lost the moment the function returns.")}
 
 <h3>Envelope versus check</h3>
 <p>The distinction that makes the library safe, and the one spreadsheets almost never
 make. Ask for 150&nbsp;MPa concrete and the module <em>refuses</em>; ask for 100 and it
 answers.</p>
 
-{cap("repl_envelope", "python", "<b>Screenshot 4.3</b> &mdash; an exception, not a number. The message names the limit, the clause behind it, and your value.")}
+{cap("repl_envelope", "python", "<b>Screenshot 4.4</b> &mdash; an exception, not a number. The message names the limit, the clause behind it, and your value.")}
 
 <table class="data">
 <tr><th></th><th>Envelope</th><th>Check</th></tr>
@@ -528,12 +549,19 @@ rule is why you can call any of it in any order without circular surprises.</p>
 <tr><td class="n">L5</td><td><code>report/</code></td><td>The audit artifact</td></tr>
 </table>
 
+<p>The rule is not tidiness. A concrete example from this repository: a load train is a
+load, so <code>LoadTrain</code> lives in <code>analysis/loading.py</code> and not with the
+moving-load driver in <code>analysis/moving.py</code> &mdash; putting it with the driver would
+make <code>loads</code> depend on <code>analysis.envelope</code>, which already depends on
+<code>loads.combinations</code>. That is a real import cycle, not a style argument, and
+Python would refuse to load it.</p>
+
 <h3>What is already there, and how to find it</h3>
 <p>Fifty-six modules are registered. <code>CATALOGUE.md</code> in the repository root
 lists every one with its clause coverage and verification status, and it is generated
 from the code itself so it cannot go stale. For a single package, ask Python:</p>
 
-{cap("repl_discover", "python", "<b>Screenshot 4.4</b> &mdash; every public calculation in AS 3600, listed by the library itself. The docstring names the Basis, the Parameters and the Returns. <code>dir(x)</code> is also the fastest recovery when you guess an attribute name wrong.")}
+{cap("repl_discover", "python", "<b>Screenshot 4.5</b> &mdash; every public calculation in AS 3600, listed by the library itself. The docstring names the Basis, the Parameters and the Returns. <code>dir(x)</code> is also the fastest recovery when you guess an attribute name wrong.")}
 
 {callout("good", "Your job is the middle step", '''
 <p>You are not writing these equations and you are not re-deriving them. You are
@@ -793,7 +821,64 @@ The Markdown renderer suits the other route &mdash; paste into a Word template, 
 
 def part_12() -> str:
     return f"""
-<h2><span class="num">12</span>What to do next</h2>
+<h2><span class="num">12</span>Marking an equation and a module verified</h2>
+
+<p class="lead">Part 4 said validation is your job. This is the mechanism the repository
+already provides for recording that you did it &mdash; and for refusing to pretend you did.
+The rule is one line: <strong>no module enters the catalog without golden vectors and a
+named checker</strong>.</p>
+
+<h3>Two different things get verified</h3>
+<table class="data">
+<tr><th></th><th>An equation</th><th>A module</th></tr>
+<tr><td>What you check</td><td>The constant and the form against the printed clause</td>
+    <td>That the whole calculation reproduces a known answer</td></tr>
+<tr><td>How</td><td>Read the <code>Basis</code>, open the Standard, compare</td>
+    <td>A golden vector: inputs, an expected answer, and its source</td></tr>
+<tr><td>Recorded as</td><td>The <code>[VECTOR]</code> tag stops being a warning</td>
+    <td><code>checked_by</code> in the YAML, and <code>Provenance.status</code></td></tr>
+</table>
+
+<h3>Step 1 &mdash; add a case, not a test</h3>
+<p>Vectors live in <code>tests/golden/vectors/*.yaml</code> and one runner walks all of
+them, so adding a benchmark means adding a case. The <code>source</code> field is the
+important one: specific enough that someone else can go and find it.</p>
+
+{repo_excerpt("tests/golden/vectors/beam_analysis.yaml", "  - id: SS-UDL-01", "  - id: SS-PT", "<b>Screenshot 12.1</b> &mdash; one case. <code>checked_by: PENDING</code> is the placeholder that keeps the module out of the catalog until a person replaces it. <code>tolerance</code> is recorded because a vector passing at 5% and one passing at 0.01% carry different weight.")}
+
+<h3>Step 2 &mdash; run them, and read what is still outstanding</h3>
+{cap("golden_run", "bash", "<b>Screenshot 12.2</b> &mdash; the vectors pass, and the suite still tells you they are worthless until someone signs them. That list prints on every run, so the outstanding work cannot quietly disappear.")}
+
+<h3>Step 3 &mdash; sign it, in two places</h3>
+<p>Replace <code>PENDING</code> with the checker's name and the date in the YAML. Then
+raise the module's <code>Provenance</code> from <code>UNVERIFIED</code>. The second step
+has a guard: <code>VERIFIED</code> is a claim about a person, so the code demands the
+person.</p>
+
+{cap("repl_verified", "python", "<b>Screenshot 12.3</b> &mdash; claiming VERIFIED without a checker raises. With a named checker, a date and at least one vector, the module reports <code>issuable</code>. The checker is not the author &mdash; that is the point of the field.")}
+
+<table class="data">
+<tr><td><code>UNVERIFIED</code></td><td>Written, not checked against anything. Not for issue. <em>Everything in this library, today.</em></td></tr>
+<tr><td><code>SELF_CHECKED</code></td><td>The author checked it against a source. No independent checker yet.</td></tr>
+<tr><td><code>VERIFIED</code></td><td>Vectors pass and an engineer other than the author signed off.</td></tr>
+<tr><td><code>FAILED</code></td><td>Vectors passed once and now do not. Pulled from the catalog.</td></tr>
+<tr><td><code>SUPERSEDED</code></td><td>Standard revised; kept only to reproduce previously issued output.</td></tr>
+</table>
+
+<h3>Step 4 &mdash; turn the safety catch on</h3>
+<p>Once a catalog is clean, strict mode makes the library refuse to produce a number from
+anything unverified, rather than printing a warning nobody reads. Today it stops at the
+first module it reaches, which is an honest description of where the repository is:</p>
+
+{cap("strict_mode", "bash", "<b>Screenshot 12.4</b> &mdash; <code>AUSTRUCT_STRICT=1</code>, and the library will not even import. This is the switch you flip when the work in Screenshot 12.2 is done, and the reason the report in part 11 says <code>issuable: False</code> rather than saying nothing at all.")}
+
+{callout("good", "Where to start", "<p><code>CATALOGUE.md</code> lists all 56 modules with their status, and the README's <em>What is verified, and what is not</em> section names the specific open questions &mdash; whether Cl&nbsp;8.2.4.2's k<sub>v</sub> uses d<sub>o</sub> or d<sub>v</sub>, AS&nbsp;5100.5's k<sub>uo</sub> limit, the &psi; factors per occupancy. Check those first: they are the ones the author already knows he is unsure about.</p>")}
+"""
+
+
+def part_13() -> str:
+    return f"""
+<h2><span class="num">13</span>What to do next</h2>
 
 <h3>The habits worth carrying over</h3>
 <ol class="steps">
@@ -845,9 +930,128 @@ Built from the committed job files and captured terminal output by
 """
 
 
+def card() -> str:
+    return """
+<section class="card">
+<h2>Reference card</h2>
+<p class="lead" style="margin-bottom:5mm">One page. Simply supported RC beam, AS/NZS&nbsp;1170.0
+combinations, AS&nbsp;3600:2018 capacities.</p>
+
+<div class="card-grid">
+<div>
+
+<div class="blk"><h4>The call sequence</h4>
+<table class="mini">
+<tr><td><code>1</code></td><td><code>Project(...)</code> &rarr; <code>.load_combinations(sls=False)</code></td></tr>
+<tr><td><code>2</code></td><td><code>parse("350 x 650 | C32 | ...")</code> &rarr; section</td></tr>
+<tr><td><code>3</code></td><td><code>LoadCase(name, ActionType.G, (UDL(...),))</code></td></tr>
+<tr><td><code>4</code></td><td><code>simply_supported(L, section=section)</code></td></tr>
+<tr><td><code>5</code></td><td><code>analyse_combinations(beam, cases, combos)</code></td></tr>
+<tr><td><code>6</code></td><td><code>env.M_star</code>, <code>env.shear_at_d_from_support(d)</code></td></tr>
+<tr><td><code>7</code></td><td><code>as3600.check_flexure / check_shear</code></td></tr>
+<tr><td><code>8</code></td><td><code>Report(...)</code>, <code>.add(result)</code>, <code>.render(...)</code></td></tr>
+</table></div>
+
+<div class="blk"><h4>Imports</h4>
+<p><code>from austruct.design import as3600</code> &mdash; the default. The call still names
+the Standard.</p>
+<p>Never <code>import *</code>. Job code sits next to the script; library code is installed.</p>
+<p><code>dir(as3600)</code> lists what exists; <code>print(f.__doc__)</code> gives Basis,
+Parameters and Returns.</p>
+</div>
+
+<div class="blk"><h4>Units &mdash; N, mm, MPa</h4>
+<table class="mini">
+<tr><td><code>1 kN/m</code></td><td>= <code>1 N/mm</code> exactly</td></tr>
+<tr><td>in</td><td><code>7.2 * m</code>, <code>40 * kN</code>, <code>5.2 * kPa</code></td></tr>
+<tr><td>out</td><td><code>M / kNm</code>, <code>V / kN</code></td></tr>
+<tr><td>sign</td><td>down +ve, sagging +ve, uplift &minus;ve</td></tr>
+<tr><td>hogging</td><td>invert the section; do not negate</td></tr>
+</table></div>
+
+<div class="blk"><h4>Designation grammar</h4>
+<p><code>b x D | Cxx | COV c | BOT n-Nd | TOP n-Nd | LIG Nd-2L@s</code></p>
+<p>First field is dimensions; the rest are keyword-led and order-independent. An
+unrecognised field raises. <code>designate(parse(s)) == s</code>.</p>
+</div>
+
+<div class="blk"><h4>AS 3600 checks you get</h4>
+<table class="mini">
+<tr><td>Cl 8.1.5</td><td>k<sub>uo</sub> &le; 0.36 (ductility)</td></tr>
+<tr><td>Cl 8.1.6.1</td><td>M<sub>uo</sub> &ge; 1.2 M<sub>cr</sub></td></tr>
+<tr><td>Cl 2.2.2</td><td>M* &le; &phi;M<sub>uo</sub></td></tr>
+<tr><td>Cl 8.2.1.7</td><td>A<sub>sv</sub>/s &ge; minimum</td></tr>
+<tr><td>Cl 8.2.1.1</td><td>V* &le; &phi;V<sub>u</sub></td></tr>
+</table>
+<p><code>check_shear</code> needs <code>M_star</code>: capacity is coupled to demand.</p>
+</div>
+
+</div>
+<div>
+
+<div class="blk"><h4>Envelope vs check</h4>
+<table class="mini">
+<tr><td>Envelope</td><td>Outside &rarr; exception, no number. The answer is unknown.</td></tr>
+<tr><td>Check</td><td>Outside &rarr; a full result reading FAIL. The answer is known.</td></tr>
+</table></div>
+
+<div class="blk"><h4>Every result carries</h4>
+<p><code>.inputs .basis .envelope .outputs .checks .provenance</code><br>
+plus <code>.passed</code>, <code>.utilisation</code>, <code>.get("phiMuo")</code>,
+<code>.to_dict()</code></p>
+</div>
+
+<div class="blk"><h4>Verification status</h4>
+<table class="mini">
+<tr><td><code>UNVERIFIED</code></td><td>not checked &mdash; not for issue</td></tr>
+<tr><td><code>SELF_CHECKED</code></td><td>author checked, no independent checker</td></tr>
+<tr><td><code>VERIFIED</code></td><td>vectors pass + named checker &ne; author</td></tr>
+<tr><td><code>FAILED</code></td><td>passed once, now does not</td></tr>
+<tr><td><code>SUPERSEDED</code></td><td>Standard revised</td></tr>
+</table>
+<p>Sign in two places: <code>checked_by</code> in the vector YAML, and
+<code>Provenance(status=..., checker=..., vectors=...)</code>.
+<code>AUSTRUCT_STRICT=1</code> refuses to run anything unverified.</p>
+</div>
+
+<div class="blk"><h4>When it will not run</h4>
+<table class="mini">
+<tr><td><code>No module named 'austruct'</code></td><td>environment not activated</td></tr>
+<tr><td><code>No module named 'job_data'</code></td><td>running from the wrong folder</td></tr>
+<tr><td><code>FileNotFoundError</code> on an output</td><td>relative path; anchor with
+  <code>Path(__file__)</code></td></tr>
+<tr><td><code>OutsideEnvelope</code></td><td>input outside the method's validity</td></tr>
+<tr><td>Off by 1000</td><td>a units multiplier, in or out</td></tr>
+</table></div>
+
+<div class="blk"><h4>Where things live</h4>
+<table class="mini">
+<tr><td><code>materials/</code></td><td>grades, bar catalogue</td></tr>
+<tr><td><code>project/ loads/</code></td><td>job record, combinations</td></tr>
+<tr><td><code>sections/</code></td><td>geometry, RC sections</td></tr>
+<tr><td><code>analysis/</code></td><td>solver, envelopes, moving loads</td></tr>
+<tr><td><code>design/rc_common/</code></td><td>the mechanics, shared</td></tr>
+<tr><td><code>design/as3600/</code></td><td>what AS 3600 adds</td></tr>
+<tr><td><code>report/</code></td><td>the audit artifact</td></tr>
+<tr><td><code>CATALOGUE.md</code></td><td>all 56 modules + status</td></tr>
+</table></div>
+
+</div>
+</div>
+
+<footer class="doc">
+Tutorial 01 &middot; <code>tutorials/01_simply_supported_beam/</code> &middot;
+Built from the committed job files and captured terminal output by
+<code>build_tutorial.py</code>. <strong>Nothing in this library is verified for
+issue.</strong>
+</footer>
+</section>
+"""
+
+
 def build_html() -> str:
     parts = [cover(), part_1(), part_2(), part_3(), part_4(), part_5(), part_6(),
-             part_7(), part_8(), part_9(), part_10(), part_11(), part_12()]
+             part_7(), part_8(), part_9(), part_10(), part_11(), part_12(), part_13(), card()]
     pyg = HtmlFormatter().get_style_defs(".src")
     return (f"<!doctype html><html><head><meta charset='utf-8'>"
             f"<title>Calling vetted calculation modules from a job file</title>"
@@ -868,7 +1072,8 @@ def main() -> None:
     pdf = HERE / "Tutorial_01_Beam_B1.pdf"
     subprocess.run(
         [chrome, "--headless", "--no-sandbox", "--disable-gpu",
-         "--no-pdf-header-footer", f"--print-to-pdf={pdf}", html_path.as_uri()],
+         "--no-pdf-header-footer", "--virtual-time-budget=10000",
+         f"--print-to-pdf={pdf}", html_path.as_uri()],
         check=True, capture_output=True,
     )
     print(f"wrote {pdf}  ({pdf.stat().st_size / 1e6:.1f} MB)")
