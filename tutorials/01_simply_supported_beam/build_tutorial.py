@@ -274,6 +274,19 @@ footer.doc { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid var(--rul
 """
 
 
+REPO = HERE.parent.parent
+
+
+def repo_excerpt(relpath: str, start: str, end: str | None = None, note: str = "") -> str:
+    """A real slice out of the library source, with its real line numbers."""
+    text = (REPO / relpath).read_text().split("\n")
+    i = next(n for n, ln in enumerate(text) if start in ln)
+    j = len(text) if end is None else next(n for n, ln in enumerate(text) if n > i and end in ln)
+    while j > i and not text[j - 1].strip():
+        j -= 1
+    return code("\n".join(text[i:j]), relpath, first_line=i + 1, note=note)
+
+
 # ---------------------------------------------------------------------------
 # Content
 # ---------------------------------------------------------------------------
@@ -284,649 +297,516 @@ def cover() -> str:
   <h1>Calling vetted calculation<br>modules from a job file</h1>
   <div class="rule"></div>
   <div class="sub">A simply supported roof beam, analysed over the ultimate load
-  combinations of AS/NZS&nbsp;1170 and designed for flexure and shear to
+  combinations of AS/NZS&nbsp;1170.0 and designed for flexure and shear to
   AS&nbsp;3600:2018 &mdash; written the way you would run a real job.</div>
   <dl>
     <dt>Written for</dt><dd>An engineer who reads design codes fluently and Python
       slowly. No prior Python project experience assumed.</dd>
     <dt>Library</dt><dd><code>austruct</code> 0.1.0 &mdash; the toolkit in this repository</dd>
     <dt>Worked example</dt><dd>Job 25-0142 Northbank Depot, roof beam B1</dd>
-    <dt>Framework</dt><dd>The six ASET components (Ferster, 2025)</dd>
-    <dt>Every panel</dt><dd>Real output. Each terminal panel is the captured stdout
-      of the command shown; each code panel is read out of the committed file at build time.</dd>
-    <dt>Status</dt><dd><strong>Not verified for issue.</strong> This document teaches the
-      workflow. It makes no claim that any number the library produces is correct.</dd>
+    <dt>Every panel</dt><dd>Real output. Terminal panels are captured stdout; code
+      panels are read out of the committed files at build time.</dd>
+    <dt>Status</dt><dd><strong>Not verified for issue.</strong> This teaches the
+      workflow. It makes no claim that any number the library produces is correct
+      &mdash; that validation is yours to do.</dd>
   </dl>
 </section>"""
 
 
-def part_0() -> str:
+def part_1() -> str:
     return f"""
-<h2><span class="num">0</span>What you are going to build</h2>
+<h2><span class="num">1</span>What you are going to build</h2>
 
-<p class="lead">By the end of this you will have a folder for one job, containing two
-short Python files you wrote, that together produce a signed calculation report for a
-beam. Neither of your files contains a single clause of AS&nbsp;3600. Every code
-equation comes from a library that lives somewhere else, is version controlled, and is
-tested.</p>
+<p class="lead">A folder for one job, holding two short files you wrote, that
+together produce a signed calculation report for a beam. Neither file contains a
+clause of AS&nbsp;3600. Every code equation comes from a library that lives
+elsewhere, is version controlled, and is tested.</p>
 
-<p>That separation is the whole idea, and it is worth being blunt about why it matters.
-A spreadsheet mixes three things that have completely different lifetimes:</p>
+<p>That separation is the whole idea. A spreadsheet tangles three things with
+completely different lifetimes:</p>
 
 <table class="data">
-<tr><th>What it is</th><th>How often it changes</th><th>Who should own it</th></tr>
-<tr><td>The <strong>code equations</strong> &mdash; &phi;M<sub>uo</sub>, k<sub>v</sub>, &theta;<sub>v</sub></td>
-    <td>When the Standard is amended. Every few years.</td>
-    <td>One vetted, tested library. Written once, checked once.</td></tr>
-<tr><td>The <strong>job</strong> &mdash; spans, loads, grades, the client's name</td>
-    <td>Every job. Sometimes every day.</td><td>You, in a job folder.</td></tr>
-<tr><td>The <strong>decision</strong> &mdash; 350&nbsp;&times;&nbsp;650, 3-N24</td>
-    <td>Every iteration, until it lands.</td><td>You, in one line you can read aloud.</td></tr>
+<tr><th>What it is</th><th>Changes</th><th>Should live</th></tr>
+<tr><td><strong>Code equations</strong> &mdash; &phi;M<sub>uo</sub>, k<sub>v</sub>, &theta;<sub>v</sub></td>
+    <td>When the Standard is amended</td>
+    <td>In one vetted, tested library</td></tr>
+<tr><td><strong>The job</strong> &mdash; spans, loads, grades, the client</td>
+    <td>Every job</td><td>In a job folder</td></tr>
+<tr><td><strong>The decision</strong> &mdash; 350&nbsp;&times;&nbsp;650, 3-N24</td>
+    <td>Every iteration</td><td>In one line you can read aloud</td></tr>
 </table>
 
-<p>In a spreadsheet all three are tangled in the same cells, so re-using the equations
-means copying the job with them &mdash; and that copy is now a second, unchecked version
-of AS&nbsp;3600. In Python you keep them apart by putting the equations in an
-<em>importable package</em> and the job in a <em>script that imports it</em>. That is
-what the word "import" is really doing for you: it is not a convenience, it is the
-mechanism that stops your calculations from being copied.</p>
-
-{callout("good", "The shape of the finished job", '''
-<p>Two files you write, one command you run, five files you get back:</p>
-<ol class="steps">
-<li><code>job_data.py</code> &mdash; the job. Project record, spans, tributary widths,
-areal loads, and the wind pressure worked out to AS/NZS&nbsp;1170.2. No capacities.</li>
-<li><code>beam_B1.py</code> &mdash; the member. Says what B1 is, what is on it, and what to
-check. Every capacity comes from an <code>import</code>.</li>
-<li><code>python beam_B1.py</code> &mdash; and out come three diagrams, a Markdown report
-and an HTML report, all stamped with the clause references used to produce them.</li>
-</ol>''')}
+<p>Re-using spreadsheet equations means copying the job with them &mdash; and that copy
+is now a second, unchecked version of AS&nbsp;3600. Putting the equations in an
+importable package and the job in a script that imports it is what stops the copying.
+That is what <code>import</code> is really for.</p>
 
 <h3>Where this sits in the ASET framework</h3>
-<p>Ferster's <em>Anatomy of Your Automated Structural Engineering Toolkit</em> splits a
-toolkit into six components. This tutorial walks all six in order, because that order is
-also the order a real calculation goes in. Keep the map in your head as you go &mdash; when
-you are lost in the code, the question "which of the six am I in?" usually unsticks it.</p>
+<p>Ferster's six components are also the order a real calculation goes in. When you
+are lost in the code, "which of the six am I in?" usually unsticks it.</p>
 
 <table class="data">
 <tr><th>#</th><th>ASET component</th><th>In this job</th><th>Where the code lives</th></tr>
 <tr><td class="n">1</td><td>Reference data</td><td>C32 concrete, N24 bar areas</td><td><code>austruct.materials</code></td></tr>
 <tr><td class="n">2</td><td>Project data</td><td>Job record &rarr; &psi; factors &rarr; combinations; wind</td><td><code>austruct.project</code>, <code>austruct.loads</code>, <em>your</em> <code>job_data.py</code></td></tr>
-<tr><td class="n">3</td><td>Fast demand calculation</td><td>Analyse 7 combinations, envelope them</td><td><code>austruct.analysis</code></td></tr>
+<tr><td class="n">3</td><td>Fast demand calculation</td><td>7 combinations, analysed and enveloped</td><td><code>austruct.analysis</code></td></tr>
 <tr><td class="n">4</td><td>Design documentation</td><td><code>350 x 650 | C32 | BOT 3-N24 | ...</code></td><td><code>austruct.design_documentation</code></td></tr>
 <tr><td class="n">5</td><td>Design verification</td><td>Flexure and shear to AS 3600:2018</td><td><code>austruct.design.as3600</code></td></tr>
 <tr><td class="n">6</td><td>Reporting</td><td>The signed audit document</td><td><code>austruct.report</code></td></tr>
 </table>
 
-{callout("warn", "One honest caveat before you start", '''
-<p>Every module in this library currently reports its verification status as
-<code>UNVERIFIED</code>, and every report it produces is stamped
-<strong>NOT VERIFIED FOR ISSUE</strong>. That is deliberate and it is correct: the
-constants have been written but not independently checked against the printed
-Standards. This tutorial teaches you the <em>workflow</em>. Checking the numbers is a
-separate job, and the library is built so that job is possible &mdash; which is more than
-a spreadsheet usually offers.</p>''')}
-"""
-
-
-def part_1() -> str:
-    return f"""
-<h2 class="pagebreak"><span class="num">1</span>How Python finds other people's code</h2>
-
-<p class="lead">Everything that follows rests on four words: module, package, install,
-and path. Ten minutes here will save you an afternoon of <code>ModuleNotFoundError</code>.</p>
-
-<h3>A module is a file. A package is a folder of them.</h3>
-<p>A <strong>module</strong> is any <code>.py</code> file. <code>job_data.py</code> is a
-module. A <strong>package</strong> is a folder of modules that can be imported as a unit
-&mdash; <code>austruct</code> is a package, <code>austruct.design</code> is a sub-package
-inside it, and <code>austruct.design.as3600.flexure</code> is a module inside that. The
-dots in an import statement are folder separators.</p>
-
-<p>So this line:</p>
-<p><code>from austruct.design import as3600</code></p>
-<p>reads as: <em>go into the folder</em> <code>austruct/design/</code>, <em>and give me the
-thing called</em> <code>as3600</code>. And once you have it, <code>as3600.check_flexure(...)</code>
-calls a function that lives in a file you did not write, did not copy, and cannot
-accidentally edit while typing a span.</p>
-
-<h3>The three shapes of an import, and when to use which</h3>
-<table class="data">
-<tr><th>You write</th><th>You then use</th><th>Use it when</th></tr>
-<tr><td><code>import austruct</code></td><td><code>austruct.design.as3600.check_flexure(...)</code></td>
-    <td>Rarely. Too long to read.</td></tr>
-<tr><td><code>from austruct.design import as3600</code></td><td><code>as3600.check_flexure(...)</code></td>
-    <td><strong>Most of the time.</strong> The call still says which Standard it came from.</td></tr>
-<tr><td><code>from austruct.design.as3600 import check_flexure</code></td><td><code>check_flexure(...)</code></td>
-    <td>Sparingly. Six months later, <code>check_flexure</code> alone does not tell a
-    reviewer whether that was AS&nbsp;3600 or AS&nbsp;5100.5.</td></tr>
-</table>
-
-{callout("stop", "Never do this", '''
-<p><code>from austruct.design.as3600 import *</code> pulls every name in the module into
-your file at once. It is the Python equivalent of pasting someone's whole spreadsheet
-into your sheet: you now cannot tell which numbers are yours, and a rename upstream
-silently changes your results. In a calculation file it is not a style preference, it is
-a traceability defect.</p>''')}
-
-<h3>Where Python actually looks</h3>
-<p>When you write <code>import x</code>, Python searches a list of folders, in order, and
-takes the first <code>x</code> it finds:</p>
-<ol class="steps">
-<li><strong>The folder the script you ran lives in.</strong> Not the folder you are standing in
-&mdash; the folder of the <code>.py</code> file you handed to <code>python</code>. This is why
-<code>beam_B1.py</code> can say <code>import job_data</code> with no setup at all: they are
-siblings.</li>
-<li><strong>The site-packages of the environment you are in.</strong> This is where
-<code>pip install</code> puts things, and it is how <code>austruct</code> is found from any
-directory on the machine.</li>
-<li>The standard library, and a few other places you will not need to think about.</li>
-</ol>
-
-<p>Both of the errors below are that list failing, and they read very differently once
-you know it. First: the library is not in this environment, because the environment was
-never activated.</p>
-
-{cap("err_novenv", "bash", "<b>Screenshot 1.1</b> &mdash; no <code>(.venv)</code> in the prompt, so <code>pip install</code>'s work is invisible. The fix is <code>source .venv/bin/activate</code>, not editing the file.")}
-
-<p>Second: your own module is not found, because you are running from the wrong
-directory &mdash; and then the same import working one folder down.</p>
-
-{cap("err_localmod", "bash", "<b>Screenshot 1.2</b> &mdash; <code>import job_data</code> is not magic. It works because <code>job_data.py</code> sits beside the file being run.")}
-
-{callout("warn", "The rule to memorise", '''
-<p><strong>Library code gets installed. Job code sits next to the script.</strong>
-If you ever find yourself writing <code>sys.path.append("../../my_calcs")</code> to reach
-your own calculations, stop &mdash; that is the signal that those calculations have grown up
-and want to be an installed package too.</p>''')}
+{callout("warn", "One caveat before you start", '''
+<p>Every module in this library reports its status as <code>UNVERIFIED</code>, and
+every report it produces is stamped <strong>NOT VERIFIED FOR ISSUE</strong>. The
+constants are written but not independently checked against the printed Standards.
+This tutorial teaches the workflow; validating the numbers is the engineer's job, and
+part 4 shows you where to look to do it.</p>''')}
 """
 
 
 def part_2() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">2</span>Setting up, from nothing</h2>
+<h2><span class="num">2</span>How Python finds other people's code</h2>
 
-<p class="lead">Two folders, and they must be different folders. One holds the library.
-One holds the job. Confusing them is the single most common way a Python toolkit turns
-back into a spreadsheet.</p>
+<p class="lead">A <strong>module</strong> is a file. A <strong>package</strong> is a folder
+of them. The dots in an import are folder separators.</p>
 
-<h3>Step 1 &mdash; a virtual environment</h3>
-<p>A <em>virtual environment</em> is a private copy of Python for one project. It exists so
-that upgrading a package for this job cannot silently change the answers on last year's
-job. Create it once, in the library folder, and activate it every time you open a
-terminal. The <code>(.venv)</code> that appears in your prompt is the confirmation.</p>
+<p>So <code>from austruct.design import as3600</code> reads as: go into
+<code>austruct/design/</code> and give me <code>as3600</code>. After that,
+<code>as3600.check_flexure(...)</code> calls a function in a file you did not write,
+did not copy, and cannot edit by accident while typing a span.</p>
 
-{cap("setup_install", "bash — in the library folder", "<b>Screenshot 2.1</b> &mdash; <code>pip install -e</code> installs the library in <em>editable</em> mode: <code>site-packages</code> gets a pointer to the source folder rather than a copy, so a fix to the library is live immediately. The bracketed names are optional extras &mdash; <code>plots</code> pulls in matplotlib, <code>report</code> pulls in the renderers.")}
+<table class="data">
+<tr><th>You write</th><th>You then use</th><th>Use it when</th></tr>
+<tr><td><code>import austruct</code></td><td><code>austruct.design.as3600.check_flexure(...)</code></td>
+    <td>Rarely &mdash; too long to read.</td></tr>
+<tr><td><code>from austruct.design import as3600</code></td><td><code>as3600.check_flexure(...)</code></td>
+    <td><strong>Most of the time.</strong> The call still names the Standard.</td></tr>
+<tr><td><code>from austruct.design.as3600 import check_flexure</code></td><td><code>check_flexure(...)</code></td>
+    <td>Sparingly &mdash; alone it does not say AS 3600 rather than AS 5100.5.</td></tr>
+</table>
 
-<h3>Step 2 &mdash; prove it worked before you write anything</h3>
-<p>Two commands. The first shows you <em>which</em> copy of the library you are about to
-use, which is the question you will want answered the first time two versions disagree.
-The second runs the library's own test suite &mdash; the evidence that the thing you are
-about to trust still behaves the way its author intended.</p>
+{callout("stop", "Never use import *", '''
+<p><code>from austruct.design.as3600 import *</code> pulls every name into your file at
+once. It is the equivalent of pasting someone's whole spreadsheet into yours: you can no
+longer tell which numbers are yours, and a rename upstream silently changes your results.
+In a calculation file that is a traceability defect, not a style preference.</p>''')}
 
-{cap("setup_verify", "bash", "<b>Screenshot 2.2</b> &mdash; the path printed is the source tree, not a copy in site-packages: that is what <em>editable</em> means. 799 passing tests is not proof the clauses are right, but it is proof nothing has broken since they were written.")}
-
-{callout("", "If pytest feels absurdly slow", '''
-<p>On a CPU-limited container, multi-threaded BLAS spin-waiting inside hundreds of tiny
-matrix solves can cost two orders of magnitude. Prefix the command with
-<code>OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1</code>. The 799 tests above ran in under
-three minutes that way.</p>''')}
-
-<h3>Step 3 &mdash; make the job folder</h3>
-<p>One folder per <em>job</em>, not per member. B1, B2 and the transfer slab all share the
-same project record and the same load schedule, and duplicating those three times is how
-they drift apart.</p>
-
-{cap("tree", "bash", "<b>Screenshot 2.3</b> &mdash; the job folder (top) and the library folder (bottom) are separate, and only one of them is installed. <code>outputs/</code> holds only generated files, so you can delete it at any time and re-run to get it back &mdash; which is a good habit: if you cannot delete it, something in there was hand-edited.")}
-
-{callout("good", "A checklist you can re-use for every new job", '''
+<h3>Where Python actually looks</h3>
 <ol class="steps">
-<li>Copy the two-file job folder from your last job. Do not start from a blank page.</li>
-<li>Open a terminal, activate the environment, and confirm <code>(.venv)</code> appears.</li>
-<li><code>cd</code> into <code>job/</code>. Everything runs from there.</li>
-<li>Edit <code>job_data.py</code> first, completely, before touching the member file.</li>
-<li>Run early and often. A five-line script that runs beats a fifty-line one that does not.</li>
-</ol>''')}
+<li><strong>The folder of the script you ran</strong> &mdash; not the folder you are standing
+in. This is why <code>beam_B1.py</code> can say <code>import job_data</code> with no setup:
+they are siblings.</li>
+<li><strong>The site-packages of the environment you are in</strong> &mdash; where
+<code>pip install</code> puts things, and how <code>austruct</code> is found from anywhere.</li>
+<li>The standard library, and places you will not need to think about.</li>
+</ol>
+
+<p>Both errors below are that list failing. First, the library is not in this
+environment because the environment was never activated:</p>
+
+{cap("err_novenv", "bash", "<b>Screenshot 2.1</b> &mdash; no <code>(.venv)</code> in the prompt. The fix is <code>source .venv/bin/activate</code>, not editing the file.")}
+
+<p>Second, your own module is not found because you are one directory too high &mdash;
+then the same import working one folder down:</p>
+
+{cap("err_localmod", "bash", "<b>Screenshot 2.2</b> &mdash; <code>import job_data</code> is not magic. It works because <code>job_data.py</code> sits beside the file being run.")}
+
+{callout("warn", "The rule to memorise", '''
+<p><strong>Library code gets installed. Job code sits next to the script.</strong> If you
+find yourself writing <code>sys.path.append("../../my_calcs")</code> to reach your own
+calculations, that is the signal those calculations have grown up and want to be an
+installed package too.</p>''')}
 """
 
 
 def part_3() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">3</span>Finding out what the library can do</h2>
+<h2><span class="num">3</span>Setting up, from nothing</h2>
 
-<p class="lead">Before importing anything into a job file, get into the habit of poking
-at it interactively. Type <code>python</code> with no arguments and you get a prompt where
-every line runs as you press enter. Nothing you do there can break a file.</p>
+<p class="lead">Two folders, and they must be different folders. One holds the library.
+One holds the job.</p>
 
-<h3>Reference data &mdash; ASET component 1</h3>
-<p>Start with the simplest thing in the toolkit: a concrete grade. It is looked up from a
-JSON file, not calculated, and one call gets you everything AS&nbsp;3600 derives from
-f'<sub>c</sub>.</p>
+<p>A <em>virtual environment</em> is a private copy of Python for one project, so that
+upgrading a package for this job cannot silently change last year's answers. Create it
+once in the library folder and activate it every time you open a terminal; the
+<code>(.venv)</code> in the prompt is the confirmation.</p>
 
-{cap("repl_refdata", "python", "<b>Screenshot 3.1</b> &mdash; the third line is a deliberate mistake, left in. Guessing an attribute name is normal; the recovery is <code>dir()</code>, which lists everything the object actually has. That two-line loop is the most useful debugging habit in Python.")}
+{cap("setup_install", "bash — in the library folder", "<b>Screenshot 3.1</b> &mdash; <code>pip install -e</code> installs it <em>editable</em>: site-packages gets a pointer to the source folder rather than a copy, so a library fix is live immediately. The bracketed names are optional extras.")}
 
-<p>Two things in that panel are worth dwelling on. <code>Ec = 30100 MPa (source: table)</code>
-tells you the modulus came from Table&nbsp;3.1.2 rather than the expression &mdash; the
-library records <em>which</em> route it took, not just the answer. And
-<code>bar_area(24)</code> returns <code>452.389...</code>, not a rounded 450: reference data
-is held exactly and rounded only when printed.</p>
+<p>Before writing anything, prove it worked. The first command shows <em>which</em> copy
+you are about to use; the second runs the library's own tests &mdash; the evidence that the
+thing you are about to trust still behaves as its author intended.</p>
 
-<h3>The same trick on a design module</h3>
-<p><code>dir()</code> on a package tells you what checks exist. The docstring tells you what
-each one wants. Between them you rarely need to open the source.</p>
+{cap("setup_verify", "bash", "<b>Screenshot 3.2</b> &mdash; the path is the source tree, not a copy: that is what <em>editable</em> means. 799 passing tests is not proof the clauses are right, but it is proof nothing has broken since they were written.")}
 
-{cap("repl_discover", "python", "<b>Screenshot 3.2</b> &mdash; every public calculation in AS 3600, listed by the library itself. The docstring of <code>check_shear</code> names its Basis (which clauses), its Parameters (what you must supply) and its Returns.")}
+<p>Then the job folder. One folder per <em>job</em>, not per member: B1, B2 and the
+transfer slab share a project record and a load schedule, and duplicating those is how
+they drift apart.</p>
 
-{callout("", "The three places to look, in order", '''
-<p><strong>1.</strong> <code>dir(module)</code> in the REPL &mdash; what exists.
-<strong>2.</strong> <code>print(thing.__doc__)</code> or <code>help(thing)</code> &mdash; what it wants.
-<strong>3.</strong> <code>CATALOGUE.md</code> in the repository root &mdash; every registered module,
-its clause coverage and its verification status, generated from the code itself so it
-cannot go stale.</p>''')}
-
-<h3>Envelope versus check &mdash; the distinction that makes the library safe</h3>
-<p>This is the most important idea in the toolkit and it takes thirty seconds to see.
-Ask for 150&nbsp;MPa concrete and the module <em>refuses</em>. Ask for 100 and it answers.</p>
-
-{cap("repl_envelope", "python", "<b>Screenshot 3.3</b> &mdash; an <code>OutsideEnvelope</code> exception, not a number. The message names the limit, the clause behind it, and your value.")}
-
-<table class="data">
-<tr><th></th><th>Envelope</th><th>Check</th></tr>
-<tr><td>What it bounds</td><td>The range in which the method is valid</td><td>A code criterion</td></tr>
-<tr><td>Breaching it means</td><td>The answer is <em>unknown</em></td><td>The answer is <em>known and it fails</em></td></tr>
-<tr><td>What you get</td><td>An exception. No number at all.</td><td>A valid result that reads FAIL</td></tr>
-<tr><td>Example</td><td>f'<sub>c</sub> = 150 MPa</td><td>M* &gt; &phi;M<sub>uo</sub></td></tr>
-</table>
-
-<p>An overstressed beam is a perfectly good calculation with a failing result &mdash; you
-want to see that, with all the working, so you can size up. A beam of 150&nbsp;MPa
-concrete is not a calculation this library can do at all, and quietly extrapolating would
-be the worst possible outcome. Spreadsheets almost never make this distinction. It is
-worth insisting on it in anything you build.</p>
+{cap("tree", "bash", "<b>Screenshot 3.3</b> &mdash; job folder above, library folder below; only one of them is installed. <code>outputs/</code> holds only generated files, so you can delete it and re-run to get it back. If you cannot, something in there was hand-edited.")}
 """
 
 
 def part_4() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">4</span>File one &mdash; the job (ASET component 2)</h2>
+<h2><span class="num">4</span>From a bare equation to a vetted module</h2>
 
-<p class="lead">Write this file completely before you touch the member file. It contains
-no capacities and no Standards arithmetic beyond turning site data into loads. If you
-later design B2, B3 and the transfer slab, they all import this same file &mdash; and they
-all move together when the client changes the plant weight.</p>
+<p class="lead">This part explains why the repository is shaped the way it is. You are
+not going to build these modules &mdash; they exist. But you should recognise the shape,
+because it is what makes them safe to call, and it is what you will validate.</p>
 
-<h3>The job record</h3>
-<p><code>Project</code> is a plain record of client-supplied facts. It looks like
-bookkeeping, and then it quietly does real work: the occupancy you state drives the
-&psi; combination factors, and the structure type decides whether you get the
-AS/NZS&nbsp;1170.0 building combinations or the AS&nbsp;5100.2 bridge set. Stating
-"office building" once is what stops a bridge combination reaching a floor beam.</p>
+<h3>The equation is the small part</h3>
+<p>The concrete compressive resultant of AS&nbsp;3600 Cl&nbsp;8.1.3 is three lines of
+arithmetic. In a script you would write it once and move on. In the library it is
+<code>rc_common/stress_block.py</code>, and the arithmetic is still three lines:</p>
 
-{excerpt("job_data.py", "# 1. The job record", "# 2. Geometry", "<b>Screenshot 4.1</b> &mdash; note what is <em>not</em> here: no defaults invented on your behalf. An unstated design life stays empty so the report can say &lsquo;not stated&rsquo; rather than printing a number nobody chose.")}
+{repo_excerpt("src/austruct/design/rc_common/stress_block.py", "    block_depth = min(", "    return ConcreteBlock(", "<b>Screenshot 4.1</b> &mdash; &alpha;<sub>2</sub>&nbsp;f'<sub>c</sub> over &gamma;d<sub>n</sub>, exactly as printed in the Standard. Nothing clever happens here, and nothing should.")}
 
-<h3>Geometry and areal loads</h3>
-<p>Spans and tributary widths get names, so that every later use of them is self-evidently
-the same number. The library works in newtons and millimetres &mdash; which makes
-1&nbsp;kN/m exactly 1&nbsp;N/mm &mdash; so areal loads are written in kPa the way a load
-schedule states them and converted exactly once, here, by multiplying by
-<code>kPa</code>.</p>
+<p>That arithmetic lives in <code>rc_common/</code>, shared by every standard. One layer up,
+<code>as3600/flexure.py</code> wraps it in the part that earns its keep: a docstring naming
+the clauses it implements and the range it is valid over, so a reviewer can check both
+without reading the code.</p>
 
-{excerpt("job_data.py", "# 2. Geometry the loads depend on", "# 4. Wind", "<b>Screenshot 4.2</b> &mdash; the triple-quoted string under each value is a docstring, and it is doing the job a cell comment does in a spreadsheet, except it cannot be scrolled out of view or lost in a copy-paste.")}
+{repo_excerpt("src/austruct/design/as3600/flexure.py", "Ultimate flexural capacity of a reinforced concrete section", "    Parameters", "<b>Screenshot 4.2</b> &mdash; the AS 3600 wrapper around that mechanics, one layer up. <code>Basis</code> says which clauses. <code>Envelope</code> says the range it is valid over. Those two sections are the difference between an equation and a module you can hand to a checker.")}
 
-{callout("", "Units: read this once and stop worrying", '''
-<p>Everything is N, mm and MPa. The constants <code>kN</code>, <code>m</code>,
-<code>kPa</code>, <code>kNm</code> and <code>kN_per_m</code> are plain multipliers that
-convert <em>into</em> that system on the way in (<code>7.2 * m</code> is 7200.0) and
-<em>out of</em> it on the way to a print statement (<code>M / kNm</code>). If a number
-ever looks wrong by a factor of 1000, this is where to look first.</p>''')}
+<h3>Three stages, and why the third exists</h3>
+<table class="data">
+<tr><th>Stage</th><th>What you get</th><th>What breaks</th></tr>
+<tr><td>Equation in a script</td><td>One answer, once</td>
+    <td>The next beam means copy-paste, and now there are two versions.</td></tr>
+<tr><td>Equation in a function</td><td>Re-usable, testable</td>
+    <td>It returns a bare float. Nothing records the clause, the assumptions, or the
+    range it is valid over &mdash; so nothing can be checked or reported.</td></tr>
+<tr><td><strong>Equation in a module</strong></td><td>A <code>CalcResult</code></td>
+    <td>Nothing. This is the shape everything in <code>design/</code> returns.</td></tr>
+</table>
 
-<h3>Wind, to AS/NZS 1170.2</h3>
-<p>The library does not derive site wind &mdash; that is a job-specific piece of work with
-too many local judgements to hide inside a package. So it goes in your file, as a small
-function with each multiplier on its own line, tagged with the clause it comes from. This
-is exactly the pattern to copy whenever you need a calculation the library does not
-have.</p>
+<p>Every public calculation in this library returns a <code>CalcResult</code>, never a
+bare float, carrying six things:</p>
 
-{excerpt("job_data.py", "# 4. Wind, to AS/NZS 1170.2", "# 5. Derived line loads", "<b>Screenshot 4.3</b> &mdash; one factor per line, each with its clause. When the checker asks &lsquo;where did M<sub>z,cat</sub> = 0.91 come from?&rsquo;, the answer is on the same line as the number.")}
+<table class="data">
+<tr><td><code>.inputs</code></td><td>Echoed verbatim, with units</td></tr>
+<tr><td><code>.basis</code></td><td>The clauses, in the order they were applied</td></tr>
+<tr><td><code>.envelope</code></td><td>Validity limits, and whether you are inside them</td></tr>
+<tr><td><code>.outputs</code></td><td>The results, with units</td></tr>
+<tr><td><code>.checks</code></td><td>Pass/fail against each code criterion</td></tr>
+<tr><td><code>.provenance</code></td><td>Version, author, checker, verification status</td></tr>
+</table>
 
-<p>Two habits in that panel are worth stealing. The <code>[VECTOR]</code> tag marks values
-transcribed from a Standard, so a reviewer can find every one of them with a text search.
-And <code>net_uplift_pressure()</code> returns a magnitude only, with the docstring saying
-the sign is applied at the call site &mdash; because the direction of a load is easier to
-get right where you can see the beam it is on.</p>
+<p>That is why the report in part 11 needs no assembly: the results already carry everything a
+report has to show.</p>
 
-<h3>Derived line loads &mdash; the file's actual output</h3>
-{excerpt("job_data.py", "# 5. Derived line loads", None, "<b>Screenshot 4.4</b> &mdash; three numbers, in the library's units, ready to be consumed. Everything above exists to produce these.")}
+<h3>Envelope versus check</h3>
+<p>The distinction that makes the library safe, and the one spreadsheets almost never
+make. Ask for 150&nbsp;MPa concrete and the module <em>refuses</em>; ask for 100 and it
+answers.</p>
+
+{cap("repl_envelope", "python", "<b>Screenshot 4.3</b> &mdash; an exception, not a number. The message names the limit, the clause behind it, and your value.")}
+
+<table class="data">
+<tr><th></th><th>Envelope</th><th>Check</th></tr>
+<tr><td>Bounds</td><td>Where the method is valid</td><td>A code criterion</td></tr>
+<tr><td>Breach means</td><td>The answer is <em>unknown</em></td><td>The answer is <em>known and it fails</em></td></tr>
+<tr><td>You get</td><td>An exception, no number</td><td>A full result that reads FAIL</td></tr>
+</table>
+
+<p>An overstressed beam is a good calculation with a failing result &mdash; you want to see
+it, with the working, so you can size up. A beam of 150&nbsp;MPa concrete is not a
+calculation this library can do at all.</p>
+
+<h3>One import rule keeps it composable</h3>
+<p>Modules import from layers <em>above</em> them in this list, never below. That single
+rule is why you can call any of it in any order without circular surprises.</p>
+
+<table class="data">
+<tr><td class="n">L0</td><td><code>core/</code></td><td>The contract: basis, envelope, provenance, units</td></tr>
+<tr><td class="n">L1</td><td><code>materials/</code>, <code>project/</code></td><td>Grades, bar catalogue, job record</td></tr>
+<tr><td class="n">L2</td><td><code>sections/</code>, <code>design_documentation/</code></td><td>Geometry, the designation grammar</td></tr>
+<tr><td class="n">L3</td><td><code>analysis/</code>, <code>loads/</code>, <code>structures/</code></td><td>Solver, combinations, envelopes</td></tr>
+<tr><td class="n">L4</td><td><code>design/</code></td><td><code>rc_common/</code> holds the mechanics; <code>as3600/</code>, <code>as5100_5/</code>, <code>as4100/</code>, <code>as3700/</code> hold only what differs</td></tr>
+<tr><td class="n">L5</td><td><code>report/</code></td><td>The audit artifact</td></tr>
+</table>
+
+<h3>What is already there, and how to find it</h3>
+<p>Fifty-six modules are registered. <code>CATALOGUE.md</code> in the repository root
+lists every one with its clause coverage and verification status, and it is generated
+from the code itself so it cannot go stale. For a single package, ask Python:</p>
+
+{cap("repl_discover", "python", "<b>Screenshot 4.4</b> &mdash; every public calculation in AS 3600, listed by the library itself. The docstring names the Basis, the Parameters and the Returns. <code>dir(x)</code> is also the fastest recovery when you guess an attribute name wrong.")}
+
+{callout("good", "Your job is the middle step", '''
+<p>You are not writing these equations and you are not re-deriving them. You are
+<strong>reading the Basis, checking the constants against your copy of the Standard,
+and then calling the module</strong> &mdash; after which every job that calls it inherits
+that one act of checking. That is the entire economic argument for the structure.</p>''')}
 """
 
 
 def part_5() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">5</span>File two &mdash; the member</h2>
+<h2><span class="num">5</span>File one &mdash; the job (ASET component 2)</h2>
 
-<p class="lead">Now the calculation itself. It opens with a block of imports, and that
-block is worth reading slowly, because it is the answer to the question this tutorial
-exists for: <em>how do I call vetted modules into a different file?</em></p>
+<p class="lead">Write this completely before touching the member file. It holds no
+capacities. If you later design B2, B3 and the transfer slab, they import this same file
+and all move together when the client changes the plant weight.</p>
 
-{excerpt("beam_B1.py", "from pathlib import Path", "# ------", "<b>Screenshot 5.1</b> &mdash; six imports from the installed library, then one from the file next door. The blank line between them is a convention worth keeping: above it, code you did not write; below it, code you did.")}
+<p><code>Project</code> is a plain record of client-supplied facts that quietly does real
+work: the occupancy drives the &psi; combination factors, and the structure type decides
+whether you get the AS/NZS&nbsp;1170.0 building set or the AS&nbsp;5100.2 bridge set.
+Stating "office building" once is what stops a bridge combination reaching a floor beam.</p>
 
-<p>Read down the imports and you can predict the whole calculation before reading a line
-of it: something about beams and loads, units, AS&nbsp;3600, a designation parser, load
-cases, a bar catalogue, a report. Imports at the top of a file are a table of contents.</p>
+{excerpt("job_data.py", "# 1. The job record", "# 2. Geometry", "<b>Screenshot 5.1</b> &mdash; note what is <em>not</em> here: no defaults invented on your behalf. An unstated design life stays empty so the report can say &lsquo;not stated&rsquo;.")}
 
-<h3>The design decision, as one line of text (ASET component 4)</h3>
-<p>Here is where the toolkit does something a spreadsheet cannot. The beam is described
-by a string in a defined grammar &mdash; the same string that goes on the drawing &mdash; and
-the library turns it into a section object.</p>
+<p>Spans and tributary widths get names, so every later use is self-evidently the same
+number. The library works in N, mm and MPa &mdash; which makes 1&nbsp;kN/m exactly
+1&nbsp;N/mm &mdash; so areal loads are written in kPa the way a load schedule states them
+and converted exactly once, by multiplying by <code>kPa</code>.</p>
 
-{excerpt("beam_B1.py", "# 1. The design decision", "# 2. Load cases", "<b>Screenshot 5.2</b> &mdash; <code>parse()</code> in, <code>designate()</code> back out. The <code>assert</code> on line 34 is a one-line guard that the round trip is exact.")}
+{excerpt("job_data.py", "# 2. Geometry the loads depend on", "# 4. Wind", "<b>Screenshot 5.2</b> &mdash; the triple-quoted string under each value is a docstring, doing the job a cell comment does in a spreadsheet, except it cannot be scrolled out of view or lost in a copy-paste.")}
 
-<table class="data">
-<tr><th>Field</th><th>Means</th><th>Rules</th></tr>
-<tr><td><code>350 x 650</code></td><td>b &times; D, mm</td><td>Always first</td></tr>
-<tr><td><code>C32</code></td><td>f'<sub>c</sub> = 32 MPa</td><td rowspan="4">All keyword-led and order-independent. An unrecognised field <strong>raises</strong> rather than being ignored &mdash; silently dropping <code>TOP 2-N16</code> would hand you a singly reinforced capacity for a doubly reinforced beam.</td></tr>
-<tr><td><code>COV 40</code></td><td>Cover to the fitment, mm</td></tr>
-<tr><td><code>BOT 3-N24</code></td><td>Three N24 bottom bars</td></tr>
-<tr><td><code>LIG N12-2L@250</code></td><td>N12 two-leg ligatures at 250</td></tr>
-</table>
+{callout("", "Units, once", '''
+<p><code>kN</code>, <code>m</code>, <code>kPa</code>, <code>kNm</code> and
+<code>kN_per_m</code> are plain multipliers: they convert <em>into</em> N-mm on the way in
+(<code>7.2 * m</code> is 7200.0) and <em>out</em> on the way to a print statement
+(<code>M / kNm</code>). If a number is ever wrong by a factor of 1000, look here first.</p>''')}
 
-{callout("good", "Why a string, and not five arguments", '''
-<p>Because that string is the thing everyone else in the project already reads. It goes
-in the schedule, on the drawing, in the email to the drafter, and into
-<code>parse()</code> &mdash; unchanged. There is no transcription step between the design
-decision and the calculation, so there is no transcription error. And because
-<code>designate(parse(s)) == s</code> is asserted, the calculation cannot quietly be for a
-different beam than the one you wrote down.</p>''')}
+<h3>Wind, to AS/NZS 1170.2</h3>
+<p>The library does not derive site wind &mdash; too many local judgements to hide inside a
+package. So it goes in your file, one multiplier per line, each tagged with its clause.
+This is the pattern to copy whenever you need something the library does not have.</p>
 
-{cap_slice("run_full", "SECTION", "LOAD CASES", "python beam_B1.py — first block", "<b>Screenshot 5.3</b> &mdash; what that one line expanded into. Note d = 586 mm, derived from cover + fitment + half a bar, not typed. That subtraction is one of the most common arithmetic slips in hand calculations, and here it happens once, in tested code.")}
+{excerpt("job_data.py", "# 4. Wind, to AS/NZS 1170.2", "# 5. Derived line loads", "<b>Screenshot 5.3</b> &mdash; when the checker asks where M<sub>z,cat</sub> = 0.91 came from, the answer is on the same line as the number. <code>[VECTOR]</code> marks values transcribed from a Standard, so every one can be found by text search.")}
+
+<p>The file's actual output is three numbers &mdash; <code>W_G</code>, <code>W_Q</code> and
+<code>W_WU</code>, in the library's units. Everything above exists to produce them.</p>
 """
 
 
 def part_6() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">6</span>Load cases and combinations (AS/NZS 1170)</h2>
+<h2><span class="num">6</span>File two &mdash; the member</h2>
 
-<p class="lead">A load case says <em>what the loads are and which action they represent</em>.
-A combination says <em>how the jurisdiction requires them to be added up</em>. Keeping
-those separate is why you never write <code>1.2 * dead + 1.5 * live</code> by hand
-again.</p>
+<p class="lead">The import block answers the question this tutorial exists for.</p>
 
-<h3>The cases &mdash; unfactored, and tagged</h3>
-{excerpt("beam_B1.py", "# 2. Load cases", "# [UNITS] A UDL learns", "<b>Screenshot 6.1</b> &mdash; three cases. Each carries an <code>ActionType</code>, and that tag is the whole mechanism: it is what connects &lsquo;this 18.79 kN/m is permanent action&rsquo; to &lsquo;the code multiplies permanent action by 1.2 in this combination&rsquo;.")}
+{excerpt("beam_B1.py", "from pathlib import Path", "# ------", "<b>Screenshot 6.1</b> &mdash; six imports from the installed library, then one from the file next door. The blank line between them is worth keeping: above it, code you did not write; below it, code you did.")}
 
-<p>Four things in that panel repay attention:</p>
-<ul>
-<li><strong><code>SelfWeight</code> instead of a number.</strong> It derives the UDL from the
-section's own area and a density, so the moment you change 350&nbsp;&times;&nbsp;650 to
-400&nbsp;&times;&nbsp;750 the self weight follows. A hand-computed 5.36 would not.</li>
-<li><strong>A UDL and a point load in the same case.</strong> A load case is a group of
-loads, not one load: the roof imposed pressure and the plant unit are both Q and must be
-factored together.</li>
-<li><strong>The minus sign on the wind UDL.</strong> Downward is positive throughout, so
-uplift is negative. It is applied here, next to the beam, rather than buried in
-<code>job_data.py</code>.</li>
-<li><strong>Names you will read again.</strong> <code>"G_roof"</code> and
-<code>"Wu_uplift"</code> come back out in the envelope as the governing case, so make them
-say something.</li>
-</ul>
+<p>Read down the imports and you can predict the calculation before reading a line of it.
+Imports at the top of a file are a table of contents.</p>
 
-{cap_slice("run_full", "LOAD CASES", "COMBINATIONS", "python beam_B1.py", "<b>Screenshot 6.2</b> &mdash; every load echoed back with its type and intensity. Reading this block before looking at any capacity is the equivalent of checking your load take-down before you start designing.")}
+<h3>The design decision, as one line of text (ASET component 4)</h3>
+{excerpt("beam_B1.py", "# 1. The design decision", "# 2. Load cases", "<b>Screenshot 6.2</b> &mdash; <code>parse()</code> in, <code>designate()</code> back out. The <code>assert</code> is a one-line guard that the round trip is exact.")}
 
-<h3>The combinations come from the project record, not from you</h3>
-<p>You never type a load factor. <code>PROJECT.load_combinations(sls=False)</code> reads the
-structure type and the occupancy off the record you wrote in part 4 and returns the
-AS/NZS&nbsp;1170.0 Cl&nbsp;4.2.2 ultimate set, with the &psi; factors already resolved for
-an office.</p>
+<table class="data">
+<tr><th>Field</th><th>Means</th><th>Rules</th></tr>
+<tr><td><code>350 x 650</code></td><td>b &times; D, mm</td><td>Always first</td></tr>
+<tr><td><code>C32</code></td><td>f'<sub>c</sub> = 32 MPa</td><td rowspan="4">Keyword-led and order-independent. An unrecognised field <strong>raises</strong> rather than being ignored &mdash; silently dropping <code>TOP 2-N16</code> would hand you a singly reinforced capacity for a doubly reinforced beam.</td></tr>
+<tr><td><code>COV 40</code></td><td>Cover to the fitment, mm</td></tr>
+<tr><td><code>BOT 3-N24</code></td><td>Three N24 bottom bars</td></tr>
+<tr><td><code>LIG N12-2L@250</code></td><td>N12 two-leg ligatures at 250</td></tr>
+</table>
 
-{cap("repl_project", "python", "<b>Screenshot 6.3</b> &mdash; <code>(0.4, 0.7, 0.4)</code> is (&psi;<sub>c</sub>, &psi;<sub>s</sub>, &psi;<sub>l</sub>) for an office, and you can see them arrive in ULS3 and ULS4. Change <code>Occupancy.OFFICE</code> to <code>STORAGE</code> and every combination below changes with it.")}
+<p>Why a string and not five arguments: it is the thing everyone else already reads. It
+goes in the schedule, on the drawing, in the email to the drafter, and into
+<code>parse()</code> unchanged &mdash; so there is no transcription step, and therefore no
+transcription error.</p>
 
-{callout("warn", "Combinations you did not ask for are a feature", '''
-<p>Seven come back, including earthquake and snow, because the <em>project</em> implies
-them. The analysis step drops the ones no supplied case contributes to, so ULS6 and ULS7
-cost nothing here. The point is that the list is generated from the jurisdiction, not
-from what you remembered on the day &mdash; and the one you forget is the one that
-governs.</p>''')}
-
-{cap_slice("run_full", "COMBINATIONS (AS", "ENVELOPE", "python beam_B1.py", "<b>Screenshot 6.4</b> &mdash; the same seven, echoed by the job script. ULS5 (0.9G + W<sub>u</sub>) is the uplift/reversal case: with 0.9G at 21.7 kN/m against 3.98 kN/m of uplift there is no reversal here, but the combination is run and the result recorded rather than assumed.")}
+{cap_slice("run_full", "SECTION", "LOAD CASES", "python beam_B1.py — first block", "<b>Screenshot 6.3</b> &mdash; what that one line expanded into. d = 586 mm is derived from cover + fitment + half a bar, not typed: one of the most common arithmetic slips in hand calculations, done once here in tested code.")}
 """
 
 
 def part_7() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">7</span>Analyse, then envelope (ASET component 3)</h2>
+<h2><span class="num">7</span>Load cases and combinations (AS/NZS 1170.0)</h2>
 
-<p class="lead">Two lines of code do the whole of the analysis: build the member, then run
-every combination over it and keep the worst of each action &mdash; along with a record of
-which combination caused it.</p>
+<p class="lead">A load case says <em>what the loads are and which action they represent</em>.
+A combination says <em>how the jurisdiction adds them up</em>. Keeping them separate is why
+you never write <code>1.2 * dead + 1.5 * live</code> by hand again.</p>
 
-{excerpt("beam_B1.py", "# 3. Analyse over every ULS", "# 4. Design verification", "<b>Screenshot 7.1</b> &mdash; <code>simply_supported()</code> is one of a family (<code>cantilever</code>, <code>propped</code>, <code>continuous</code>). Passing <code>section=</code> rather than a bare EI means the deflections use the section you actually detailed.")}
+{excerpt("beam_B1.py", "# 2. Load cases", "# [UNITS] A UDL learns", "<b>Screenshot 7.1</b> &mdash; each case carries an <code>ActionType</code>, and that tag is the mechanism: it connects &lsquo;this 18.79 kN/m is permanent action&rsquo; to &lsquo;the code multiplies permanent action by 1.2 in this combination&rsquo;.")}
 
-{cap_slice("run_full", "ENVELOPE", "AS 3600:2018 CHECKS", "python beam_B1.py", "<b>Screenshot 7.2</b> &mdash; the governing action table. Every row carries the combination that caused it in square brackets, which is the single most useful thing an envelope can tell you.")}
-
-<p>Read that block the way you would read the summary page of a frame analysis:</p>
 <ul>
-<li><strong>M* = 296.1 kN.m at x = 3.000 m [ULS2]</strong> &mdash; sagging, under the plant
-load, from 1.2G&nbsp;+&nbsp;1.5Q. Not at midspan, because the point load is not at
-midspan.</li>
-<li><strong>M<sub>hog</sub> = 0.00 kN.m</strong> &mdash; no reversal anywhere, under any of the
-seven. The uplift case never overcomes 0.9G.</li>
-<li><strong>Reactions, max and min.</strong> The minimum at each support is 69.43&nbsp;kN
-from ULS5, still comfortably downward: no hold-down required. That is a real check, and
-it fell out of the envelope for free.</li>
-<li><strong>Deflection 6.26 mm [ULS2]</strong> &mdash; from <em>factored</em> loads on a gross
-section, so it is a solver output, not a serviceability check. Do that separately, with
-SLS combinations and <code>as3600.effective_stiffness</code>.</li>
+<li><strong><code>SelfWeight</code> instead of a number</strong> &mdash; derived from the
+section's own area, so it follows when you change 350&nbsp;&times;&nbsp;650 to
+400&nbsp;&times;&nbsp;750. A hand-computed 5.36 would not.</li>
+<li><strong>A UDL and a point load in one case</strong> &mdash; the roof pressure and the
+plant unit are both Q and must be factored together.</li>
+<li><strong>The minus sign on the wind UDL</strong> &mdash; downward is positive throughout,
+so uplift is negative, applied here next to the beam rather than buried in the job file.</li>
 </ul>
 
-{callout("", "One mesh, shared by every combination", '''
-<p>Meshed independently, each combination would land on a slightly different set of
-x-positions, and enveloping them would need interpolation &mdash; which smears exactly the
-shear discontinuities an envelope exists to capture. The library gives every combination
-the union of all mesh points, so the envelope is element-wise and exact. You get the sharp
-step under the plant load, not a rounded corner.</p>''')}
+{cap_slice("run_full", "LOAD CASES", "COMBINATIONS", "python beam_B1.py", "<b>Screenshot 7.2</b> &mdash; every load echoed with its type and intensity. Reading this before looking at any capacity is the equivalent of checking your load take-down first.")}
 
-<h3>Seeing it</h3>
-<p>Two plots, both one line of code. The first is the governing combination alone, drawn
-the way you would draw it by hand; the second is the envelope with all seven cases faint
-behind it.</p>
+<p>You never type a load factor. <code>PROJECT.load_combinations(sls=False)</code> reads
+the structure type and occupancy off the record from part 5 and returns the
+AS/NZS&nbsp;1170.0 Cl&nbsp;4.2.2 ultimate set with the &psi; factors already resolved.</p>
 
-{excerpt("beam_B1.py", "# The governing combination on its own", "fig_sec = plots.plot_section", "<b>Screenshot 7.3</b> &mdash; <code>combo.apply(cases)</code> is the same factoring the envelope did internally, done once here where you can see it. That is the layering working: nothing is hidden, it is just not repeated.")}
+{cap("repl_project", "python", "<b>Screenshot 7.3</b> &mdash; <code>(0.4, 0.7, 0.4)</code> is (&psi;<sub>c</sub>, &psi;<sub>s</sub>, &psi;<sub>l</sub>) for an office, arriving in ULS3 and ULS4. Change <code>Occupancy.OFFICE</code> to <code>STORAGE</code> and every combination changes with it.")}
 
-{fig("B1_diagrams.png", "<b>Screenshot 7.4</b> &mdash; ULS2. Sagging is drawn downward, the engineering convention, so the moment diagram hangs the way the beam does. The shear step at 3.0 m is the 60 kN factored plant load; V = 144.2 kN at the support, reduced to 126.4 kN at d for the shear check.")}
-
-{fig("B1_envelope.png", "<b>Screenshot 7.5</b> &mdash; the envelope, with every contributing combination faint behind it. The dashed <em>min</em> curve is the lower bound: driven by ULS5 (0.9G + W<sub>u</sub>), it still sits at about 90 kN.m of sagging at midspan, which is the picture of &lsquo;no reversal anywhere&rsquo;. Seeing that is worth more than reading M<sub>hog</sub> = 0.")}
+{callout("warn", "Combinations you did not ask for are a feature", '''
+<p>Seven come back, including earthquake and snow, because the <em>project</em> implies
+them; the analysis drops the ones no supplied case contributes to, so they cost nothing.
+The point is that the list comes from the jurisdiction, not from what you remembered on
+the day &mdash; and the one you forget is the one that governs.</p>''')}
 """
 
 
 def part_8() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">8</span>Flexure to AS 3600:2018</h2>
+<h2><span class="num">8</span>Analyse, then envelope (ASET component 3)</h2>
 
-<p class="lead">After all that, the design itself is three lines. That is the correct
-proportion: the hard part of a calculation is getting the right demand to the right
-section, not evaluating the capacity once you have.</p>
+<p class="lead">Two lines: build the member, then run every combination over it and keep
+the worst of each action &mdash; with a record of which combination caused it.</p>
 
-{excerpt("beam_B1.py", "# 4. Design verification", "AS 3600:2018 CHECKS", "<b>Screenshot 8.1</b> &mdash; <code>shear_at_d_from_support(d)</code> is the code allowance for taking the design shear at d from a support that introduces compression. It is a method on the envelope because only the envelope knows the shear diagram.")}
+{excerpt("beam_B1.py", "# 3. Analyse over every ULS", "# 4. Design verification", "<b>Screenshot 8.1</b> &mdash; <code>simply_supported()</code> is one of a family (<code>cantilever</code>, <code>propped</code>, <code>continuous</code>). Passing <code>section=</code> rather than a bare EI means deflections use the section you detailed.")}
 
-{cap_slice("run_full", "AS 3600:2018 CHECKS", "Bar arrangements", "python beam_B1.py", "<b>Screenshot 8.2</b> &mdash; both checks, with the governing combination, the capacity, the utilisation and a verdict. Flexure at 0.933 is a sensibly worked section; shear at 0.372 is not, and part 10 comes back to that.")}
+{cap_slice("run_full", "ENVELOPE", "AS 3600:2018 CHECKS", "python beam_B1.py", "<b>Screenshot 8.2</b> &mdash; every row carries the combination that caused it in square brackets, which is the most useful thing an envelope can tell you.")}
 
-<h3>What is actually inside <code>check_flexure</code></h3>
-<p>The function returns a <code>CalcResult</code>, never a bare float. That object carries
-the inputs it was given, the clauses it applied, the validity envelope it enforced, the
-intermediate working, the results, and every pass/fail criterion &mdash; which is what makes
-the report in part 11 possible without you assembling anything.</p>
+<ul>
+<li><strong>M* = 296.1 kN.m at x = 3.000 m [ULS2]</strong> &mdash; under the plant load, from
+1.2G&nbsp;+&nbsp;1.5Q. Not at midspan, because the point load is not at midspan.</li>
+<li><strong>M<sub>hog</sub> = 0</strong> &mdash; no reversal under any of the seven.</li>
+<li><strong>Minimum reaction 69.43 kN [ULS5]</strong>, still downward: no hold-down
+required. A real check, which fell out of the envelope for free.</li>
+<li><strong>Deflection 6.26 mm</strong> &mdash; from <em>factored</em> loads on a gross
+section, so it is a solver output, not a serviceability check.</li>
+</ul>
 
-{cap("repl_audit", "python", "<b>Screenshot 8.3</b> &mdash; the audit trail, interrogated from the REPL. Five clauses in the order they were applied; three checks, not one; the envelope that was enforced; and the module's own verification status.")}
+{fig("B1_diagrams.png", "<b>Screenshot 8.3</b> &mdash; the governing combination alone. Sagging is drawn downward, so the moment diagram hangs the way the beam does. The shear step at 3.0 m is the 60 kN factored plant load; V = 144.2 kN at the support, 126.4 kN at d.")}
 
-<p>Notice that there are <strong>three</strong> flexural checks, not just M*&nbsp;&le;&nbsp;&phi;M<sub>uo</sub>:</p>
-<table class="data">
-<tr><th>Check</th><th>Clause</th><th>Here</th><th>Why it exists</th></tr>
-<tr><td>Ductility, k<sub>uo</sub> &le; 0.36</td><td>Cl 8.1.5</td><td>0.147 &mdash; PASS</td>
-    <td>A section that crushes before the steel yields fails without warning. This is the check a
-    hand calculation most often skips.</td></tr>
-<tr><td>M<sub>uo</sub> &ge; 1.2 M<sub>cr</sub></td><td>Cl 8.1.6.1</td><td>373 &ge; 110 kN.m &mdash; PASS</td>
-    <td>Minimum strength: the beam must not fail the instant it cracks.</td></tr>
-<tr><td>M* &le; &phi;M<sub>uo</sub></td><td>Cl 2.2.2</td><td>296.1 &le; 317.4 kN.m &mdash; PASS</td>
-    <td>The strength check everyone remembers.</td></tr>
-</table>
-
-{callout("warn", "Read the envelope notes, every time", '''
-<p>The three notes in Screenshot 8.3 are the module telling you what it did <em>not</em>
-do: no axial force, no torsion, no lateral instability of slender beams, and
-<em>sagging only</em> &mdash; "model hogging by inverting the section". That last one is a
-real trap on a continuous beam. The library will not warn you again; it has said it
-here, in the result you already have in your hand.</p>''')}
+{fig("B1_envelope.png", "<b>Screenshot 8.4</b> &mdash; the envelope, with every contributing combination faint behind it. The dashed <em>min</em> curve still sits near 90 kN.m of sagging at midspan: that is the picture of &lsquo;no reversal anywhere&rsquo;, and it is worth more than reading M<sub>hog</sub> = 0.")}
 """
 
 
 def part_9() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">9</span>Shear to AS 3600:2018</h2>
+<h2><span class="num">9</span>Flexure and shear to AS 3600:2018</h2>
 
-<p class="lead">Same call shape, one extra argument &mdash; and that extra argument is the
-interesting part.</p>
+<p class="lead">After all that, the design is three lines. That is the right proportion:
+the hard part is getting the right demand to the right section.</p>
 
-<p><code>as3600.check_shear(section, V_star=V_star, M_star=M_star)</code> takes the
-coexisting moment as well as the shear. That is not padding. AS&nbsp;3600:2018 moved to a
-modified compression field theory formulation in which the concrete contribution depends
-on the longitudinal strain in the web, which depends on M*. Shear capacity is
-<em>coupled to the demand</em>. Ferster's component 5 calls this out specifically as the
-case that makes a verification tool hard to build, and it is why you want the coupling
-handled inside a tested module rather than by remembering to look up a second table.</p>
+{excerpt("beam_B1.py", "# 4. Design verification", "AS 3600:2018 CHECKS", "<b>Screenshot 9.1</b> &mdash; <code>shear_at_d_from_support(d)</code> is the code allowance for taking design shear at d from a support that introduces compression. It is a method on the envelope because only the envelope knows the shear diagram.")}
 
-{shot("shot_report_shear.png", "<b>Screenshot 9.1</b> &mdash; the shear check as it appears in the generated report: inputs, seven clauses, the validity envelope, the working, the results and the checks. d<sub>v</sub> = 527.4 mm, k<sub>v</sub> = 0.15 and &theta;<sub>v</sub> = 36&deg; are the simplified-method values of Cl 8.2.4.2, reported rather than assumed.")}
+{cap_slice("run_full", "AS 3600:2018 CHECKS", "Bar arrangements", "python beam_B1.py", "<b>Screenshot 9.2</b> &mdash; both checks with the governing combination, capacity, utilisation and verdict.")}
 
-<h3>The two checks, and the one that is easy to forget</h3>
+<p>Note that <code>check_shear</code> takes the coexisting moment as well as the shear.
+That is not padding: AS&nbsp;3600:2018 uses a modified compression field formulation in
+which the concrete contribution depends on longitudinal strain, which depends on M*.
+Shear capacity is <em>coupled to the demand</em> &mdash; exactly the case Ferster names as the
+hard one, and the reason you want it inside a tested module.</p>
+
+<h3>Five checks, not two</h3>
 <table class="data">
 <tr><th>Check</th><th>Clause</th><th>Here</th></tr>
-<tr><td>Minimum shear reinforcement, A<sub>sv</sub>/s</td><td>Cl 8.2.1.7</td>
-    <td>0.905 &ge; 0.317 mm&sup2;/mm &mdash; PASS</td></tr>
-<tr><td>V* &le; &phi;V<sub>u</sub></td><td>Cl 2.2.2 / 8.2.1.1</td>
-    <td>126.4 &le; 339.5 kN &mdash; PASS, utilisation 0.372</td></tr>
+<tr><td>Ductility, k<sub>uo</sub> &le; 0.36</td><td>Cl 8.1.5</td><td>0.147 &mdash; PASS</td></tr>
+<tr><td>Minimum strength, M<sub>uo</sub> &ge; 1.2 M<sub>cr</sub></td><td>Cl 8.1.6.1</td><td>373 &ge; 110 kN.m &mdash; PASS</td></tr>
+<tr><td>M* &le; &phi;M<sub>uo</sub></td><td>Cl 2.2.2</td><td>296.1 &le; 317.4 kN.m &mdash; PASS</td></tr>
+<tr><td>Minimum shear reinforcement</td><td>Cl 8.2.1.7</td><td>0.905 &ge; 0.317 mm&sup2;/mm &mdash; PASS</td></tr>
+<tr><td>V* &le; &phi;V<sub>u</sub></td><td>Cl 8.2.1.1</td><td>126.4 &le; 339.5 kN &mdash; PASS</td></tr>
 </table>
 
-<p>The minimum-reinforcement check is not decoration: the simplified method's
-k<sub>v</sub>&nbsp;=&nbsp;0.15 is only available <em>because</em> the section carries at
-least minimum fitments. Widen the ligatures past that limit and both the check and the
-concrete contribution change together. The report says so on the k<sub>v</sub> row:
-"simplified, &ge; minimum fitments".</p>
+<p>The ductility check is the one a hand calculation most often skips, and the
+minimum-fitment check is not decoration: the simplified method's
+k<sub>v</sub>&nbsp;=&nbsp;0.15 is only available <em>because</em> the section carries at least
+minimum fitments. Widen the ligatures past that and both change together.</p>
+
+{cap("repl_audit", "python", "<b>Screenshot 9.3</b> &mdash; the audit trail, interrogated from the REPL: the clauses in application order, the checks, the envelope that was enforced, and the module's verification status. This is the <code>CalcResult</code> from part 4, in use.")}
+
+{callout("warn", "Read the envelope notes the first time you use a module", '''
+<p>They say what it did <em>not</em> do: no axial force, no torsion, no lateral instability,
+and <em>sagging only</em> &mdash; "model hogging by inverting the section". That last is a real
+trap on a continuous beam, and the library will not warn you twice.</p>''')}
+
+{shot("shot_report_shear.png", "<b>Screenshot 9.4</b> &mdash; the shear check as it lands in the report: inputs, seven clauses, validity envelope, working, results, checks. d<sub>v</sub> = 527.4 mm, k<sub>v</sub> = 0.15 and &theta;<sub>v</sub> = 36&deg; are reported rather than assumed.")}
 
 {callout("stop", "AS 5100.5 is not &lsquo;AS 3600 with different numbers&rsquo;", '''
-<p>The library also implements AS&nbsp;5100.5, and for flexure the two produce an
-identical nominal M<sub>uo</sub> and differ only in &phi;. For <strong>shear</strong> they
-share no code at all: AS&nbsp;5100.5:2017 predates the 2018 revision and uses the
-&beta;<sub>1</sub>&beta;<sub>2</sub>&beta;<sub>3</sub> / f<sub>cv</sub> / d<sub>o</sub>
-family. Swapping <code>as3600</code> for <code>as5100_5</code> in a shear line and expecting a
-small change is the most likely way to get a bridge wrong with this toolkit.</p>''')}
-
-<h3>Reading a utilisation of 0.37</h3>
-<p>The shear result is a genuine engineering signal, not a rounding artefact: N12
-two-leg ligatures at 250 are carrying nearly three times what this beam asks of them.
-The honest response is to widen the spacing until either the V* check or the
-minimum-reinforcement check starts to bind, and let the two checks tell you where the
-limit is. That iteration is the subject of the next part.</p>
+<p>For flexure the two give an identical nominal M<sub>uo</sub> and differ only in &phi;.
+For <strong>shear</strong> they share no code at all: AS&nbsp;5100.5:2017 predates the 2018
+revision and uses the &beta;<sub>1</sub>&beta;<sub>2</sub>&beta;<sub>3</sub> /
+f<sub>cv</sub> / d<sub>o</sub> family. Swapping <code>as3600</code> for
+<code>as5100_5</code> in a shear line and expecting a small change is the most likely way
+to get a bridge wrong with this toolkit.</p>''')}
 """
 
 
 def part_10() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">10</span>The loop: FAIL is a result, not an error</h2>
+<h2><span class="num">10</span>The loop: FAIL is a result, not an error</h2>
 
-<p class="lead">The section in this tutorial did not arrive fully formed. It was the
-second try. Here is the first, and the thirty seconds it took to fix &mdash; which is the
-part of the workflow that actually saves you time.</p>
+<p class="lead">The section here was the second try. Here is the first, and the thirty
+seconds it took to fix.</p>
 
-{cap("repl_iterate", "python", "<b>Screenshot 10.1</b> &mdash; 3-N20 gives 1.312, FAIL. <code>required_steel_area</code> says the section needs 1255 mm&sup2; and has 942. 3-N24 gives 1357 mm&sup2; and 0.933, PASS. No spreadsheet was reopened and no clause was re-read.")}
+{cap("repl_iterate", "python", "<b>Screenshot 10.1</b> &mdash; 3-N20 gives 1.312, FAIL. <code>required_steel_area</code> says the section needs 1255 mm&sup2; and has 942. 3-N24 gives 1357 mm&sup2; and 0.933, PASS. No spreadsheet was reopened and no clause re-read.")}
 
-<p>Three things make that loop fast, and all three are design choices you can copy into
-anything you build:</p>
-<ul>
-<li><strong>A failing check still returns a full result.</strong> You get the utilisation, the
-working and the shortfall &mdash; not an exception. Compare that with the envelope refusal in
-Screenshot 3.3: different situation, different behaviour, deliberately.</li>
-<li><strong>The inverse problem is a first-class function.</strong>
-<code>required_steel_area</code> answers "how much steel does this moment need?" directly,
-so you are not bisecting by hand.</li>
-<li><strong>The decision is one string.</strong> Changing <code>BOT 3-N20</code> to
-<code>BOT 3-N24</code> is the entire edit. Nothing downstream needs touching: d, the self
-weight, the diagrams and the report all follow.</li>
-</ul>
+<p>Three things make that fast, and all three are choices worth copying: a failing check
+still returns a <em>full</em> result rather than an exception; the inverse problem
+(<code>required_steel_area</code>) is a first-class function, so you are not bisecting by
+hand; and the decision is one string, so changing <code>BOT 3-N20</code> to
+<code>BOT 3-N24</code> is the entire edit &mdash; d, self weight, diagrams and report all
+follow.</p>
 
-{cap_slice("run_full", "Bar arrangements", "REPORT", "python beam_B1.py", "<b>Screenshot 10.2</b> &mdash; and if you want the options laid out, <code>describe_options</code> takes the required area and returns every practical arrangement with its excess. 3-N24 at 7.7% over is the obvious pick here; 12-N12 provides the same area and would not fit.")}
+{cap_slice("run_full", "Bar arrangements", "REPORT", "python beam_B1.py", "<b>Screenshot 10.2</b> &mdash; <code>describe_options</code> takes the required area and returns every practical arrangement with its excess. 3-N24 at 7.7% over is the obvious pick; 12-N12 provides the same area and would not fit.")}
 
-{callout("good", "When to stop iterating by hand", '''
-<p>Once you are running the same edit-and-check loop more than a few times, the library
-will do it for you: <code>as3600.minimum_cost_section</code> searches a grid of widths,
-depths and bar arrangements against concrete and steel rates and returns the cheapest
-section that passes. Same checks, same clauses &mdash; just driven by a search instead of by
-you. That is the natural next step after this tutorial, and it only becomes possible
-because the check was written as a function in the first place.</p>''')}
+<p>Once you are running that loop more than a few times,
+<code>as3600.minimum_cost_section</code> will do it for you &mdash; same checks, same clauses,
+driven by a search over widths, depths and bar arrangements against concrete and steel
+rates. That only becomes possible because the check was written as a function.</p>
 
-<h3>The other two failure modes you will hit</h3>
-<p>Neither is a mistake in the code you wrote; both are the environment telling you where
-it is looking. Together with Screenshots 1.1 and 1.2 they cover most of a first
-week.</p>
-
-{cap("err_wrongdir", "bash", "<b>Screenshot 10.3</b> &mdash; the shipped file with its output line replaced by a bare <code>OUT = &quot;../outputs&quot;</code>, run from one directory up. The imports all resolve &mdash; Python adds the <em>script's</em> folder to the path, not yours &mdash; but the relative output path does not. The fix is the line the file actually ships with: <code>Path(__file__).resolve().parent.parent / &quot;outputs&quot;</code> anchors the output folder to the script instead of to wherever you are standing.")}
+{cap("err_wrongdir", "bash", "<b>Screenshot 10.3</b> &mdash; the third failure mode, after the two in part 2: the shipped file with its output line replaced by a bare <code>OUT = &quot;../outputs&quot;</code>, run one directory up. The imports resolve (Python adds the <em>script's</em> folder to the path, not yours) but the relative output path does not. The file ships with <code>Path(__file__).resolve().parent.parent / &quot;outputs&quot;</code> instead.")}
 """
 
 
 def part_11() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">11</span>The report (ASET component 6)</h2>
+<h2><span class="num">11</span>The report (ASET component 6)</h2>
 
 <p class="lead">A calculation that only exists in a terminal is not a deliverable. The
-last block of the job file assembles the document &mdash; and the assembling is almost
-entirely just adding the results you already have, in the order you want them read.</p>
+last block of the job file assembles the document, and the assembling is mostly just
+adding the results you already have, in reading order.</p>
 
-{excerpt("beam_B1.py", "# 6. The report", "B1_report.md", "<b>Screenshot 11.1</b> &mdash; a title, a signature block generated from the project record, and then <code>add()</code> calls in reading order. The results carry their own inputs, clauses, working and checks, so nothing is transcribed into the report.")}
+{excerpt("beam_B1.py", "# 6. The report", "B1_report.md", "<b>Screenshot 11.1</b> &mdash; a title, a signature block generated from the project record, then <code>add()</code> calls in order. The results carry their own inputs, clauses, working and checks, so nothing is transcribed.")}
 
-<h3>The part only you can write</h3>
 <p><code>add_scope</code>, <code>add_assumption</code> and <code>add_conclusion</code> are
-different from <code>add</code>: they take prose, and the library cannot generate them.
-That is the point. A report that reaches an independent reviewer is read by a person, and
-a person needs to know what was assumed and what the numbers mean. Keeping the narrative
-in the same ordered list as the calculations is what stops it drifting to the back of the
-document where nobody reads it.</p>
+different: they take prose, and the library cannot generate them. A report read by an
+independent reviewer needs to say what was assumed and what the numbers mean, and keeping
+that narrative in the same ordered list as the calculations is what stops it drifting to
+the back of the document where nobody reads it.</p>
 
-{shot("shot_report_top.png", "<b>Screenshot 11.2</b> &mdash; the top of the generated HTML report. Job header, overall verdict, the not-verified banner, your preamble, and your scope and assumption blocks &mdash; then the enveloped demands.")}
+{shot("shot_report_top.png", "<b>Screenshot 11.2</b> &mdash; job header, overall verdict, the not-verified banner, then your preamble, scope and assumptions.")}
 
-{shot("shot_report_flexure.png", "<b>Screenshot 11.3</b> &mdash; the flexure check as issued: every intermediate quantity from &alpha;<sub>2</sub> through d<sub>n</sub>, k<sub>uo</sub> and the lever arm, then the three checks with utilisations. A reviewer can follow this without opening Python.")}
+{shot("shot_report_flexure.png", "<b>Screenshot 11.3</b> &mdash; the flexure check as issued: every intermediate from &alpha;<sub>2</sub> through d<sub>n</sub>, k<sub>uo</sub> and the lever arm, then the three checks with utilisations. A reviewer can follow this without opening Python.")}
 
-{shot("shot_report_end.png", "<b>Screenshot 11.4</b> &mdash; the section drawn to scale from the same object that was checked (so it cannot disagree with it), your conclusion, and a signature block with an empty Checked row. The document knows it has not been checked.")}
-
-{cap_slice("run_full", "REPORT", None, "python beam_B1.py — last lines", "<b>Screenshot 11.5</b> &mdash; and the two flags that matter. <code>passed: True</code> means every check passed. <code>issuable: False</code> means at least one module in the document is <code>UNVERIFIED</code>, and the report says so on its own face.")}
+{cap_slice("run_full", "REPORT", None, "python beam_B1.py — last lines", "<b>Screenshot 11.4</b> &mdash; the two flags that matter.")}
 
 {callout("warn", "passed and issuable are different questions", '''
 <p><strong>passed</strong> asks: did the beam satisfy the criteria? <strong>issuable</strong>
 asks: has the code that evaluated those criteria been checked against the printed
-Standard? A calculation can pass and still not be issuable, which is exactly the state
-this library is in today &mdash; and the report is built so it cannot pretend
-otherwise.</p>''')}
+Standard? A calculation can pass and still not be issuable &mdash; exactly the state this
+library is in today &mdash; and the report says so on its own face.</p>''')}
 
-<h3>Getting a PDF out</h3>
-<p>The HTML renderer writes a self-contained page; print it to PDF from any browser, or
-from the command line with headless Chromium:</p>
-{terminal('''$ chrome --headless --print-to-pdf=B1_report.pdf outputs/B1_report.html''', "bash",
-  "<b>Screenshot 11.6</b> &mdash; the same command that produced the document you are reading. The Markdown renderer is there for the other common route: paste into a Word template, or check the <code>.md</code> into git and diff calculations between revisions.")}
+<p>The HTML renderer writes a self-contained page: print it to PDF from any browser, or
+with <code>chrome --headless --print-to-pdf=B1_report.pdf outputs/B1_report.html</code>.
+The Markdown renderer suits the other route &mdash; paste into a Word template, or check the
+<code>.md</code> into git and diff calculations between revisions.</p>
 """
 
 
 def part_12() -> str:
     return f"""
-<h2 class="pagebreak"><span class="num">12</span>What to do next</h2>
+<h2><span class="num">12</span>What to do next</h2>
 
-<h3>The habits worth carrying over, in order of value</h3>
+<h3>The habits worth carrying over</h3>
 <ol class="steps">
 <li><strong>One job folder, two files, run from inside it.</strong> Copy the folder for the
 next job rather than starting blank.</li>
-<li><strong>Job data first, completely, before any member file.</strong> Loads that live in one
-place cannot disagree with themselves.</li>
-<li><strong>Never type a load factor.</strong> If you find yourself writing
-<code>1.2 *</code> anything, the project record is missing information it should have.</li>
-<li><strong>The design decision is one string.</strong> The same string as the drawing.</li>
-<li><strong>Read the envelope notes on any module the first time you use it.</strong> They tell
-you what it does not do.</li>
+<li><strong>Job data first, completely.</strong> Loads that live in one place cannot
+disagree with themselves.</li>
+<li><strong>Never type a load factor.</strong> If you are writing <code>1.2 *</code>
+anything, the project record is missing information it should have.</li>
+<li><strong>The design decision is one string</strong> &mdash; the same string as the drawing.</li>
+<li><strong>Read the Basis and the envelope notes before you trust a module</strong>, and
+validate its constants against your copy of the Standard. That check is inherited by every
+job that calls it.</li>
 <li><strong>Write the scope, assumptions and conclusion yourself.</strong> The library can
 generate everything except the engineering.</li>
 </ol>
@@ -934,48 +814,40 @@ generate everything except the engineering.</li>
 <h3>The obvious extensions to this job</h3>
 <table class="data">
 <tr><th>Next</th><th>Call</th></tr>
-<tr><td>Serviceability &mdash; the check this tutorial deliberately skipped</td>
+<tr><td>Serviceability &mdash; deliberately skipped here</td>
     <td><code>PROJECT.load_combinations(uls=False)</code>, then
     <code>as3600.effective_stiffness</code> and <code>as3600.check_deflection</code></td></tr>
 <tr><td>Crack control and detailing</td>
     <td><code>as3600.check_crack_control</code>, <code>as3600.check_detailing</code>,
     <code>as3600.check_bar_fit</code></td></tr>
-<tr><td>Design B2 and B3 as well</td>
-    <td>A second script importing the same <code>job_data</code>, or a CSV member
-    schedule through <code>design_documentation</code></td></tr>
-<tr><td>Let the search pick the section</td><td><code>as3600.minimum_cost_section</code></td></tr>
+<tr><td>B2 and B3 as well</td>
+    <td>A second script importing the same <code>job_data</code>, or a CSV member schedule
+    through <code>design_documentation</code></td></tr>
+<tr><td>Let a search pick the section</td><td><code>as3600.minimum_cost_section</code></td></tr>
 <tr><td>Continuous beams</td>
-    <td><code>austruct.analysis</code> pattern loading and
-    <code>redistribute</code> &mdash; and remember to invert the section for hogging</td></tr>
+    <td><code>austruct.analysis</code> pattern loading and <code>redistribute</code>
+    &mdash; and invert the section for hogging</td></tr>
+<tr><td>Steel, masonry, bridges</td>
+    <td><code>design.as4100</code>, <code>design.as3700</code>, <code>design.as5100_5</code>
+    &mdash; same contract, same call shape</td></tr>
 </table>
 
-<h3>Three questions Ferster asks at the end of the ASET paper</h3>
-<p>They are the right ones to sit with once the mechanics stop being the hard part:</p>
-<ul>
-<li>Which of the six components, if you built it properly, would change your week the
-most? (For most engineers it is component 2 &mdash; project data &mdash; not the
-capacity equations everyone starts with.)</li>
-<li>What data would you have to feed it, and where does that data come from today?</li>
-<li>What is the smallest version of it that would already be useful on the job you are
-on right now?</li>
-</ul>
-
-{callout("stop", "And the standing caveat", '''
+{callout("stop", "The standing caveat", '''
 <p>Nothing in this library has been verified against the printed Standards. Every report
 it produces says so on its face, and this tutorial does not change that. Treat every
-number in this document as an illustration of a workflow, not as a design.</p>''')}
+number here as an illustration of a workflow, not as a design.</p>''')}
 
 <footer class="doc">
 Tutorial 01 &middot; <code>tutorials/01_simply_supported_beam/</code> &middot;
 Built from the committed job files and captured terminal output by
-<code>build_tutorial.py</code>. Regenerate with <code>python build_tutorial.py --pdf</code>.
+<code>build_tutorial.py</code>.
 </footer>
 """
 
 
 def build_html() -> str:
-    parts = [cover(), part_0(), part_1(), part_2(), part_3(), part_4(), part_5(),
-             part_6(), part_7(), part_8(), part_9(), part_10(), part_11(), part_12()]
+    parts = [cover(), part_1(), part_2(), part_3(), part_4(), part_5(), part_6(),
+             part_7(), part_8(), part_9(), part_10(), part_11(), part_12()]
     pyg = HtmlFormatter().get_style_defs(".src")
     return (f"<!doctype html><html><head><meta charset='utf-8'>"
             f"<title>Calling vetted calculation modules from a job file</title>"
